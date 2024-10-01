@@ -10,6 +10,7 @@ pygame.init()
 screen_width, screen_height = 1000, 900
 screen = pygame.display.set_mode((screen_width, screen_height))
 pygame.display.set_caption("Racing Line Simulation")
+clock = pygame.time.Clock()
 
 userTrack = screen.copy()
 
@@ -158,17 +159,37 @@ userTrack = screen.copy()
 
 # Simulation loop
 while simulating:
+    dt = clock.tick(60) / 1000 # Get the change in time between framesa
+
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             simulating = False
+
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_w:
+                cars[0].throttlePosition = min(cars[0].throttlePosition + .1, 1)
+            elif event.key == pygame.K_s:
+                cars[0].throttlePosition = max(cars[0].throttlePosition - .1, 0)
+            elif event.key == pygame.K_a:
+                if cars[0].currentWheelAngle - 1 >= -cars[0].calculate_max_steering_angle():
+                    cars[0].currentWheelAngle -= math.radians(3)
+            elif event.key == pygame.K_d:
+                if cars[0].currentWheelAngle + 1 <= cars[0].calculate_max_steering_angle():
+                    cars[0].currentWheelAngle += math.radians(3)
     
     screen.blit(userTrack, (0,0))
     # Draw cars to screen
     for x in range(numCars):
-        screen.blit(cars[x].f1_car_image, (cars[x].car_x, cars[x].car_y))
+        cars[x].updateVelocity(dt)
+        cars[x].update_car_position(dt)
+        cars[x].display_car(screen)
+        print(cars[x].cast_lines(screen))
 
     # Update the display
     pygame.display.flip()
+
+    # Cap frame rate
+    clock.tick(60)
 
 # Quit Pygame
 pygame.quit()
