@@ -12,41 +12,38 @@ class Car:
         self.carY = 0
         self.carAngle = 0 # Angle in relation to the screen
         self.currentWheelAngle = 0
-        self.maxWheelAngle = math.radians(18)
+        self.maxWheelAngle = math.radians(20)
 
         self.frontCast = 0
         self.leftCast = 0
         self.rightCast = 0
 
         # Physics
-        # These stats are based on real f1 cars
+        # These stats are based on real f1 cars, but multipliers added for user experience
 
         # Car's characteristics
-        self.mass = 100 #lbs
-        self.coefficientOfFriction = 1.5  # Typical for F1 on a dry track
-        self.downforce = 5000  # lbs (estimate based on F1 car downforce)
+        self.mass = 1760  # lbs, realistic for F1 cars
+        self.coefficientOfFriction = 1.8  # Realistic high-performance F1 tire friction
+        self.downforce = 4500  # lbs, adjusted slightly for realism
         self.downforceNewtons = self.downforce * 4.44822  # Convert to Newtons
-        self.wheelBase = 8 #ft
+        self.wheelBase = 8  # ft, typical for F1 car
 
         # Car's kinematic characteristics
-        self.velocity = 0 #ft/s
-        self.maxVelocity = 342 #ft/s
-        self.torque = 97624 # Calculated from existing mass, accelertaion, and wheel radius
-        self.brakingPower = 42216 # Calculated from existing mass, deceleration, and wheel radius
-        self.wheelRadius = 1.5 #ft
-        self.deceleration = self.brakingPower/ (self.mass * self.wheelRadius) #ft/s^2
-        self.acceleration = self.torque/ (self.mass * self.wheelRadius) #ft/s^2
+        self.velocity = 0  # ft/s
+        self.maxVelocity = 330  # ft/s (~225 mph), more in line with F1 top speeds
+        self.torque = 1000  # lb-ft, adjusted for realistic F1 torque range
+        self.brakingPower = 30000  # adjusted to reflect braking forces of 4-5 Gs
+        self.wheelRadius = 1.2  # ft
+        self.deceleration = self.brakingPower / (self.mass * self.wheelRadius) * 100  # ft/s^2-- multiplier added for user experience
+        self.acceleration = self.torque / (self.mass * self.wheelRadius) * 1000  # ft/s^2-- multiplier added for user experience
         self.throttlePosition = .5 # 0-1 with x<.5 = decelerating and x>.5 = accelerating
-        
-
-        self.toPixelMult = .5 # Used to convert distance to pixels
-
+    
     def updateVelocity(self, dt):
         # Throttle range: [0, 1] where:
         # 0 = full brake, 0.5 = neutral, 1 = full throttle
         if self.throttlePosition > 0.5:
             # Accelerate (from neutral to full throttle)
-            throttleValue = (self.throttlePosition - 0.5) * 2  # Scale to [0, 1]
+            throttleValue = (self.throttlePosition - 0.5) * 3  # Scale to [0, 1] and increase multiplier
             self.velocity = min(self.velocity + self.acceleration * dt * throttleValue, self.maxVelocity)
         elif self.throttlePosition < 0.5:
             # Brake (from neutral to full brake)
@@ -67,7 +64,7 @@ class Car:
 
         # Maximum lateral acceleration: a_lat = μ * g + (D / m)
         # D is downforce in Newtons
-        lateralAcceleration = (self.coefficientOfFriction * g) + (self.downforceNewtons / massKG)
+        lateralAcceleration = (self.coefficientOfFriction * g) + (self.downforceNewtons / (massKG * .05)) # multiplier added to improve user exeperience
         return lateralAcceleration  # m/s²
     # Calculate the turning radius based on speed and max lateral acceleration
     def calculateTurningRadius(self):
@@ -104,7 +101,7 @@ class Car:
             turingRadius = self.wheelBase / math.tan(self.currentWheelAngle)
             
             # Calculate angular velocity (omega)
-            angularVelocity = self.velocity / turingRadius * .5 #0.5 is used to scale it down
+            angularVelocity = self.velocity / turingRadius
         else:
             # If the car is stationary or the wheel angle is 0, there should be no turning
             angularVelocity = 0
