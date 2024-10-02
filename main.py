@@ -7,8 +7,8 @@ from car import Car
 pygame.init()
 
 # Set up the display
-screen_width, screen_height = 1000, 900
-screen = pygame.display.set_mode((screen_width, screen_height))
+screenWidth, screenHeight = 1000, 900
+screen = pygame.display.set_mode((screenWidth, screenHeight))
 pygame.display.set_caption("Racing Line Simulation")
 clock = pygame.time.Clock()
 
@@ -16,24 +16,24 @@ userTrack = screen.copy()
 
 # Set up colors
 white = (255, 255, 255)
-drawing_color = black  = (0, 0, 0)
+drawingColor = black  = (0, 0, 0)
 darkGreen = (0,100,0)
 lightGreen = (144, 238, 144)
 
 # Set the initial position for the images
-finishLine_x = screen_width/2
-finishLine_y = screen_height * .9 - 37
+finishLineX = screenWidth/2
+finishLineY = screenHeight * .9 - 50 # 50 = finishLine.height//2
 
 cars = []
 numCars = 1
 # Create car objects
 for x in range(numCars):
     cars.append(Car())
-    cars[x].car_x = screen_width/2
-    cars[x].car_y = screen_height * .9
+    cars[x].carX = screenWidth/2 - 25 # 25 = car.width//2
+    cars[x].carY = screenHeight * .9
 
 # Load the button 
-startButtonX = screen_width/2-60
+startButtonX = screenWidth/2-60
 startButtonY = 30
 startButton = pygame.image.load("images/StartButton.png")
 startButton = pygame.transform.scale(startButton, (120, 50)) 
@@ -45,16 +45,14 @@ screen.fill(white)
 
 # Variables to track drawing state
 drawing = False  # Whether the mouse is currently drawing
-last_pos = None  # Store the last position to interpolate points
+lastPos = None  # Store the last position to interpolate points
 
-brush_radius = 50  # Default brush size
+brushRadius = 50  # Default brush size
 
-# Button to clear the screen
-def clear_screen():
+def clearScreen():
     screen.fill(white)
 
-# Draw a circle with interpolation to avoid gaps
-def draw_circle(screen, color, start, end, radius):
+def drawCircle(screen, color, start, end, radius):
     # Calculate the distance between start and end points
     dx = end[0] - start[0]
     dy = end[1] - start[1]
@@ -66,26 +64,49 @@ def draw_circle(screen, color, start, end, radius):
         y = int(start[1] + dy * (i / distance))
         pygame.draw.circle(screen, color, (x, y), radius)
 
-def check_collision_with_white_pixels(screen, car_image, car_x, car_y):
-    car_rect = car_image.get_rect(topleft=(car_x, car_y))
-    
-    for x in range(car_rect.width):
-        for y in range(car_rect.height):
-            # Get the pixel color at the car's position
-            pixel_color = screen.get_at((car_x + x, car_y + y))
-            
-            # Check if the pixel is white
-            if pixel_color == white:
-                return True  # Collision with white pixel detected
-    return False
+def checkCollisionWithWhitePixels(screen, car):
+    # Rotate the car image based on the car's current angle
+    rotatedCarImage = pygame.transform.rotate(car.f1CarImage, -math.degrees(car.carAngle))
+    # Get the bounding box of the rotated image (car's new location)
+    carRect = rotatedCarImage.get_rect(center=(car.carX, car.carY))
 
-# Function to draw a simple finish line
-def draw_finish_line(x, y, width, height, num_boxes):
-    box_width = width // num_boxes
-    for i in range(num_boxes):
-        # Alternate black and white for the checkered pattern
-        color = darkGreen if i % 2 == 0 else lightGreen
-        pygame.draw.rect(screen, color, pygame.Rect(x + i * box_width, y, box_width, height))
+    criticalPoints = [
+        carRect.midtop,      # Front center
+        carRect.topleft,     # Front-left corner
+        carRect.topright,    # Front-right corner
+        carRect.midleft,     # Middle-left (side)
+        carRect.midright,    # Middle-right (side)
+    ]
+    for point in criticalPoints:
+        x, y = point
+        # Check if the point is within the screen bounds
+        if 0 <= x < screen.get_width() and 0 <= y < screen.get_height():
+            # Calculate the relative position in the rotated image
+            relativeX = int(x - carRect.x)
+            relativeY = int(y - carRect.y)
+
+            if 0 <= relativeX < rotatedCarImage.get_width() and 0 <= relativeY < rotatedCarImage.get_height():
+                    pixelColor = screen.get_at((int(x), int(y)))
+
+                    # Check if the screen pixel is white (collision detected)
+                    if pixelColor == white:
+                        return True  # Collision with white pixel detected
+    return False  # No collision detected
+
+def drawFinishLine(x, y, width, height, numBoxes):
+    boxWidth = width // numBoxes
+    for col in range(numBoxes):
+        for row in range(0,height, 5):
+            if col % 2 == 0:
+                if row % 2 == 0:
+                    pygame.draw.rect(screen, darkGreen, pygame.Rect(x + col * boxWidth, y+row, boxWidth, 5))
+                else:
+                    pygame.draw.rect(screen, lightGreen, pygame.Rect(x + col * boxWidth, y+row, boxWidth, 5))       
+            else:
+                if row % 2 == 0:
+                    pygame.draw.rect(screen, lightGreen, pygame.Rect(x + col * boxWidth, y+row, boxWidth, 5))
+                else:
+                    pygame.draw.rect(screen, darkGreen, pygame.Rect(x + col * boxWidth, y+row, boxWidth, 5))       
 
 
 # Drawing loop
@@ -96,30 +117,22 @@ while drawingEvent:
         if event.type == pygame.QUIT:
             drawingEvent = False
             simulating = False
-
-            # Update car and finish line locations
-            for x in range(numCars):
-                cars[x].car_x = screen_width/2
-                cars[x].car_y = screen_height * .8
-            finishLine_x = screen_width/2
-            finishLine_y = screen_height * .8 - 37
-
         
         # Handle color change keys
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_c:
-                clear_screen()  # Clear screen on 'C' key press
+                clearScreen()  # Clear screen on 'C' key press
             # Change brush size on '1-5' key press
             elif event.key == pygame.K_1:
-                brush_radius = 10
+                brushRadius = 10
             elif event.key == pygame.K_2:
-                brush_radius = 20
+                brushRadius = 20
             elif event.key == pygame.K_3:
-                brush_radius = 30
+                brushRadius = 30
             elif event.key == pygame.K_4:
-                brush_radius = 40
+                brushRadius = 40
             elif event.key == pygame.K_5:
-                brush_radius = 50
+                brushRadius = 50
 
         # Start drawing when mouse button is pressed
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -128,7 +141,7 @@ while drawingEvent:
                 drawingEvent = False
             else: 
                 drawing = True
-                last_pos = event.pos
+                lastPos = event.pos
 
         # Stop drawing when mouse button is released
         if event.type == pygame.MOUSEBUTTONUP:
@@ -136,14 +149,14 @@ while drawingEvent:
 
         # Track mouse movement to draw circles
         if event.type == pygame.MOUSEMOTION and drawing:
-            current_pos = event.pos
-            if last_pos:
+            currentPos = event.pos
+            if lastPos:
                 # Draw smooth circles instead of lines
-                draw_circle(screen, drawing_color, last_pos, current_pos, brush_radius)
-            last_pos = current_pos
+                drawCircle(screen, drawingColor, lastPos, currentPos, brushRadius)
+            lastPos = currentPos
 
     # Draw the images
-    draw_finish_line(finishLine_x, finishLine_y, 50, 100, 5)  # x, y, width, height, number of boxes
+    drawFinishLine(finishLineX, finishLineY, 30, 100, 3)  # x, y, width, height, number of boxes
 
     # Draw start button to screen
     screen.blit(startButton, (startButtonX, startButtonY))
@@ -171,19 +184,17 @@ while simulating:
             elif event.key == pygame.K_s:
                 cars[0].throttlePosition = max(cars[0].throttlePosition - .1, 0)
             elif event.key == pygame.K_a:
-                if cars[0].currentWheelAngle - 1 >= -cars[0].calculate_max_steering_angle():
-                    cars[0].currentWheelAngle -= math.radians(3)
+                cars[0].currentWheelAngle = max(cars[0].currentWheelAngle - math.radians(3), -cars[0].calculateMaxSteeringAngle())
             elif event.key == pygame.K_d:
-                if cars[0].currentWheelAngle + 1 <= cars[0].calculate_max_steering_angle():
-                    cars[0].currentWheelAngle += math.radians(3)
+                cars[0].currentWheelAngle = min(cars[0].currentWheelAngle + math.radians(3), cars[0].calculateMaxSteeringAngle())
     
     screen.blit(userTrack, (0,0))
     # Draw cars to screen
     for x in range(numCars):
         cars[x].updateVelocity(dt)
-        cars[x].update_car_position(dt)
-        cars[x].display_car(screen)
-        print(cars[x].cast_lines(screen))
+        cars[x].updateCarPosition(dt)
+        cars[x].displayCar(screen)
+        cars[x].castLines(screen)        
 
     # Update the display
     pygame.display.flip()
@@ -191,5 +202,4 @@ while simulating:
     # Cap frame rate
     clock.tick(60)
 
-# Quit Pygame
 pygame.quit()
