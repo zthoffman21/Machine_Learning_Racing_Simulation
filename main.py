@@ -90,8 +90,8 @@ def checkCollisionWithWhitePixels(screen, car):
 
                     # Check if the screen pixel is white (collision detected)
                     if pixelColor == white:
-                        return True  # Collision with white pixel detected
-    return False  # No collision detected
+                        return True 
+    return False 
 
 def drawFinishLine(x, y, width, height, numBoxes):
     boxWidth = width // numBoxes
