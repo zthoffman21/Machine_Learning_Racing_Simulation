@@ -1,3 +1,4 @@
+import sys
 import pygame
 import math
 import neat
@@ -24,14 +25,6 @@ lightGreen = (144, 238, 144)
 finishLineX = screenWidth/2
 finishLineY = screenHeight * .9 - 50 # 50 = finishLine.height//2
 
-cars = []
-numCars = 1
-# Create car objects
-for x in range(numCars):
-    cars.append(Car())
-    cars[x].carX = screenWidth/2 - 25 # 25 = car.width//2
-    cars[x].carY = screenHeight * .9
-
 # Load the button 
 startButtonX = screenWidth/2-60
 startButtonY = 30
@@ -44,13 +37,10 @@ startButtonRect = startButton.get_rect(topleft=(startButtonX, startButtonY))
 screen.fill(white)
 
 # Variables to track drawing state
-drawing = False  # Whether the mouse is currently drawing
-lastPos = None  # Store the last position to interpolate points
+drawing = False 
+lastPos = None 
 
 brushRadius = 50  # Default brush size
-
-def clearScreen():
-    screen.fill(white)
 
 def drawCircle(screen, color, start, end, radius):
     # Calculate the distance between start and end points
@@ -64,37 +54,48 @@ def drawCircle(screen, color, start, end, radius):
         y = int(start[1] + dy * (i / distance))
         pygame.draw.circle(screen, color, (x, y), radius)
 
-def checkCollisionWithWhitePixels(screen, car):
-    # Rotate the car image based on the car's current angle
-    rotatedCarImage = pygame.transform.rotate(car.f1CarImage, -math.degrees(car.carAngle))
-    # Get the bounding box of the rotated image (car's new location)
-    carRect = rotatedCarImage.get_rect(center=(car.carX, car.carY))
+def checkCollisionWithWhitePixels(car):
+    angle_degrees = -math.degrees(car.carAngle)
 
-    criticalPoints = [
-        carRect.midtop,      # Front center
-        carRect.topleft,     # Front-left corner
-        carRect.topright,    # Front-right corner
-        carRect.midleft,     # Middle-left (side)
-        carRect.midright,    # Middle-right (side)
-    ]
-    for point in criticalPoints:
-        x, y = point
-        # Check if the point is within the screen bounds
-        if 0 <= x < screen.get_width() and 0 <= y < screen.get_height():
-            # Calculate the relative position in the rotated image
-            relativeX = int(x - carRect.x)
-            relativeY = int(y - carRect.y)
+    # Rotate the car image
+    rotatedCarImage = pygame.transform.rotate(car.f1CarImage, angle_degrees)
+    rotatedCarRect = rotatedCarImage.get_rect(center=(car.carX, car.carY))
+    carMask = pygame.mask.from_surface(rotatedCarImage)
 
-            if 0 <= relativeX < rotatedCarImage.get_width() and 0 <= relativeY < rotatedCarImage.get_height():
-                    pixelColor = screen.get_at((int(x), int(y)))
+    # Calculate the offset between the car and the track
+    offsetX = rotatedCarRect.left
+    offsetY = rotatedCarRect.top
 
-                    # Check if the screen pixel is white (collision detected)
-                    if pixelColor == white:
-                        return True 
-    return False 
+    # Check for overlap
+    overlap = outOfBoundsMask.overlap(carMask, (offsetX, offsetY))
+    if overlap:
+        car.crashed = True
+
+def checkCollisionWithFinishLine(car):
+    angle_degrees = -math.degrees(car.carAngle)
+
+    # Rotate the car image
+    rotatedCarImage = pygame.transform.rotate(car.f1CarImage, angle_degrees)
+    rotatedCarRect = rotatedCarImage.get_rect(center=(car.carX, car.carY))
+    carMask = pygame.mask.from_surface(rotatedCarImage)
+
+    # Calculate the offset between the car and the track
+    offsetX = rotatedCarRect.left
+    offsetY = rotatedCarRect.top
+
+    # Check for overlap
+    overlap = finishLineMask.overlap(carMask, (offsetX, offsetY))
+    if overlap:
+        car.hitFinishLine = True
+    else: 
+        car.hitFinishLine = False
+    return car.hitFinishLine
 
 def drawFinishLine(x, y, width, height, numBoxes):
+    # Calculate the width of the box based on finish line width and number of cols
     boxWidth = width // numBoxes
+
+    # Drawing the finish line to the screen
     for col in range(numBoxes):
         for row in range(0,height, 5):
             if col % 2 == 0:
@@ -108,6 +109,149 @@ def drawFinishLine(x, y, width, height, numBoxes):
                 else:
                     pygame.draw.rect(screen, darkGreen, pygame.Rect(x + col * boxWidth, y+row, boxWidth, 5))       
 
+def fitness(genome, car, dt):
+    # Encourage cars to move forward by rewarding based on their velocity
+    genome.fitness += car.velocity * dt * 10  # Scale factor can be adjusted
+
+    total = len(car.totalLaps)
+    # Provide a significant bonus when a car completes a lap
+    if total > genome.totalLaps:
+        genome.totalLaps = total
+        genome.fitness += 1000
+
+    # Encourage maintaining higher speeds even if a lap isn't completed
+    if total == genome.totalLaps:
+        genome.fitness += car.velocity * dt * 5
+
+    # Discourage cars from getting too close to out-of-bounds areas
+    if car.frontCast < 20:
+        genome.fitness -= (20 - car.frontCast) * 10 
+    else:
+        genome.fitness += car.velocity * dt
+
+    # Penalize for crashing
+    if car.crashed:
+        genome.fitness -= 5000  
+
+def evalGenomes(genomes, config):
+    # Initialize cars and networks
+    cars = []
+    alive = 0
+    networks = []
+    for genome_id, genome in genomes:
+        genome.fitness = 0
+        genome.totalLaps = 0  
+        car = Car(screenWidth/2 - 25, screenHeight * .9)
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        cars.append((car, genome))
+        alive += 1
+        networks.append(net)
+
+    clock = pygame.time.Clock()
+    global generation
+    generation += 1
+    startTime = pygame.time.get_ticks()
+
+    # While there are still cars alive and this it is still under the calculated time constraint = ax/(b+x) where a = 30, b = 19, and x = generation
+    while any(not car.crashed for car, _ in cars) and (pygame.time.get_ticks() - startTime) / 1000 < (30 * generation) / (19 + generation ) :
+        dt = clock.tick(80) / 1000  # Frame time
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        screen.blit(userTrack, (0, 0))
+
+        # Update and draw each car
+        for idx, (car, genome) in enumerate(cars):
+            if not car.crashed:
+                car.castLines(screen)
+                inputs = [
+                    car.frontCast, 
+                    car.leftCast, 
+                    car.rightCast, 
+                    car.left30AngleCast,
+                    car.right30AngleCast,
+                    car.left45AngleCast,
+                    car.right45AngleCast,
+                    car.velocity, 
+                    car.maxWheelAngle,
+                    car.currentWheelAngle
+                    ]
+
+                output = networks[idx].activate(inputs)
+
+                # Forces cars to accelerate and limits turning radius in the first 2 second
+                # This helps keep cars from crashing into the wall right away
+                if (pygame.time.get_ticks() - startTime) / 1000 < 2:
+                    car.throttlePosition = .55
+                    car.currentWheelAngle = (output[1] * 2 - 1) * car.maxWheelAngle * .2
+                else:
+                    car.throttlePosition = output[0] 
+                    # Ouputs 0-1 and that determines how far to turn the wheel depending on the max wheen angle
+                    # 0-0.5 = left turns and 0.5-1 = right turns
+                    car.currentWheelAngle = (output[1] * 2 - 1) * car.maxWheelAngle 
+
+                # Update car
+                car.updateVelocity(dt)
+                car.updateCarPosition(dt)
+                car.displayCar(screen)
+
+                # Check if new position caused it to crash
+                checkCollisionWithWhitePixels(car)
+                if car.crashed: alive -= 1
+
+                # Check if car hits finish line
+                if checkCollisionWithFinishLine(car) and car.leftFinishLine: # Car is on the finish line and wasn't the frame before
+                    # Update lap data
+                    lapTime = pygame.time.get_ticks() / 1000 - car.lapStart 
+                    car.totalLaps.append(lapTime)
+                    car.lapStart = pygame.time.get_ticks() / 1000
+                    car.leftFinishLine = False
+
+                    if len(car.totalLaps) > 1 and not car.firstLap: 
+                        car.firstLap = True
+                        del car.totalLaps[0]
+                    if car.firstLap:
+                        # Prints lap data to the terminal
+                        print(f"{'Lap:':<4} {len(car.totalLaps):<8} {'Time:':<5} {lapTime:<25} {'Average:':<8} {sum(car.totalLaps) / len(car.totalLaps):<40}")
+
+                if not car.hitFinishLine and not car.leftFinishLine: # Car is not on the finish line but was before
+                    car.leftFinishLine = True
+                
+                # Calculate fitness
+                fitness(genome, car, dt)
+
+        pygame.display.flip()
+    # Prints the number of cars that didn't crash during the generation
+    print("Alive", alive)
+
+def runNeat():
+    # Load config file
+    config = neat.config.Config(
+        neat.DefaultGenome,
+        neat.DefaultReproduction,
+        neat.DefaultSpeciesSet,
+        neat.DefaultStagnation,
+        'config.txt'
+    )
+    # Create population
+    # population = neat.Checkpointer.restore_checkpoint('checkpoints/neat-checkpoint-128-hardTrack')  # ** USE THIS TO RESTORE FROM CHECKPOINT **
+    population = neat.Population(config) # ** USE THIS TO CREATE A NEW POPULATION **
+    population.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    population.add_reporter(stats)
+    population.add_reporter(neat.Checkpointer(100))
+
+    # Allows other functions to see the generation number
+    global generation 
+    generation = population.generation
+
+    # Run NEAT for 50 generations
+    winner = population.run(evalGenomes, 1000)
+    
+    print(f"Best genome: {winner}")
 
 # Drawing loop
 drawingEvent = True
@@ -121,7 +265,7 @@ while drawingEvent:
         # Handle color change keys
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_c:
-                clearScreen()  # Clear screen on 'C' key press
+                screen.fill(white)  # Clear screen on 'C' key press
             # Change brush size on '1-5' key press
             elif event.key == pygame.K_1:
                 brushRadius = 10
@@ -168,38 +312,73 @@ while drawingEvent:
 startButton.fill((255,255,255))
 screen.blit(startButton, (startButtonX, startButtonY))
 pygame.display.flip()
-userTrack = screen.copy()
 
-# Simulation loop
-while simulating:
-    dt = clock.tick(60) / 1000 # Get the change in time between framesa
+userTrack = screen.copy() # ** USE THIS TO HAVE IT LEARN ON YOUR DRAWN TRACK **
+# userTrack = pygame.image.load("images/hardTest.png") # ** USE THIS TO HAVE IT LEARN ON A GIVEN TRACK **
+track_mask_surface = userTrack.convert_alpha()
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            simulating = False
+outOfBoundsMask = pygame.mask.from_threshold(
+    track_mask_surface,
+    (255, 255, 255, 255),   # Color to match (white)
+    (1, 1, 1, 255)           # Tolerance
+)
+finishLineMask = pygame.mask.from_threshold(
+    track_mask_surface, 
+    (144, 238, 144, 255),
+    (1, 1, 1, 255)
+)
 
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_w:
-                cars[0].throttlePosition = min(cars[0].throttlePosition + .1, 1)
-            elif event.key == pygame.K_s:
-                cars[0].throttlePosition = max(cars[0].throttlePosition - .1, 0)
-            elif event.key == pygame.K_a:
-                cars[0].currentWheelAngle = max(cars[0].currentWheelAngle - math.radians(3), -cars[0].calculateMaxSteeringAngle())
-            elif event.key == pygame.K_d:
-                cars[0].currentWheelAngle = min(cars[0].currentWheelAngle + math.radians(3), cars[0].calculateMaxSteeringAngle())
+# COMMENT THIS OUT TO CONTROL THE CAR YOURSELF
+if simulating:
+    runNeat()
+
+# ** UNCOMMENT THIS BLOCK TO CONTROL A CAR YOURSELF **
+# test = Car(screenWidth/2 - 25, screenHeight * .9)
+# while simulating:
+#     dt = clock.tick(60) / 1000 # Get the change in time between framesa
+
+#     for event in pygame.event.get():
+#         if event.type == pygame.QUIT:
+#             simulating = False
+
+#         if event.type == pygame.KEYDOWN:
+#             if event.key == pygame.K_w:
+#                 test.throttlePosition = min(test.throttlePosition + .1, 1)
+#             elif event.key == pygame.K_s:
+#                 test.throttlePosition = max(test.throttlePosition - .1, 0)
+#             elif event.key == pygame.K_a:
+#                 test.currentWheelAngle = max(test.currentWheelAngle - math.radians(3), -test.calculateMaxSteeringAngle())
+#             elif event.key == pygame.K_d:
+#                 test.currentWheelAngle = min(test.currentWheelAngle + math.radians(3), test.calculateMaxSteeringAngle())
     
-    screen.blit(userTrack, (0,0))
-    # Draw cars to screen
-    for x in range(numCars):
-        cars[x].updateVelocity(dt)
-        cars[x].updateCarPosition(dt)
-        cars[x].displayCar(screen)
-        cars[x].castLines(screen)        
+#     screen.blit(userTrack, (0,0))
+#     # Update car
+#     test.updateVelocity(dt)
+#     test.updateCarPosition(dt)
+#     test.displayCar(screen)
 
-    # Update the display
-    pygame.display.flip()
+#     # Check if car hits finish line
+#     if checkCollisionWithFinishLine(test) and test.leftFinishLine: # Car is on the finish line and wasn't the frame before
+#         # Update lap data
+#         lapTime = pygame.time.get_ticks() / 1000 - test.lapStart 
+#         test.totalLaps.append(lapTime)
+#         test.lapStart = pygame.time.get_ticks() / 1000
+#         test.leftFinishLine = False
 
-    # Cap frame rate
-    clock.tick(60)
+#         if len(test.totalLaps) > 1 and not test.firstLap: 
+#             test.firstLap = True
+#             del test.totalLaps[0]
+#         if test.firstLap:
+#             # Prints lap data to the terminal
+#             print(f"{'Lap:':<4} {len(test.totalLaps):<8} {'Time:':<5} {lapTime:<25} {'Average:':<8} {sum(test.totalLaps) / len(test.totalLaps):<40}")
+
+#     if not test.hitFinishLine and not test.leftFinishLine: # Car is not on the finish line but was before
+#         test.leftFinishLine = True
+
+#     # Update the display
+#     pygame.display.flip()
+
+#     # Cap frame rate
+#     clock.tick(60)
 
 pygame.quit()

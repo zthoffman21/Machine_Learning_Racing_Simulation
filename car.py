@@ -2,14 +2,21 @@ import pygame
 import math
 
 class Car: 
-    def __init__(self):
+    def __init__(self, x, y):
         # Load the car
         self.f1CarImage = pygame.image.load("images/f1Car.png")
         self.f1CarImage = pygame.transform.scale(self.f1CarImage, (50, 25)) 
 
+        self.crashed = False
+        self.firstLap = False
+        self.hitFinishLine = False
+        self.leftFinishLine = True
+        self.lapStart = 0
+        self.totalLaps = []
+
         # Position
-        self.carX = 0
-        self.carY = 0
+        self.carX = x
+        self.carY = y
         self.carAngle = 0 # Angle in relation to the screen
         self.currentWheelAngle = 0
         self.maxWheelAngle = math.radians(20)
@@ -17,6 +24,10 @@ class Car:
         self.frontCast = 0
         self.leftCast = 0
         self.rightCast = 0
+        self.left30AngleCast = 0
+        self.right30AngleCast = 0
+        self.left45AngleCast = 0
+        self.right45AngleCast = 0
 
         # Physics
         # These stats are based on real f1 cars, but multipliers added for user experience
@@ -30,7 +41,11 @@ class Car:
 
         # Car's kinematic characteristics
         self.velocity = 0  # ft/s
-        self.maxVelocity = 330 * 1.3  # ft/s (~225 mph) multiplier added for user experience
+        self.minimunVelocity = 200 
+        self.maxVelocity = 330 * 1.3  # ft/s (~225 mph) multiplier added for user experience 
+        self.passedMin = False
+        self.minVelAch = 0
+
         self.torque = 1000  # lb-ft
         self.brakingPower = 30000  # adjusted to reflect braking forces of 4-5 Gs
         self.wheelRadius = 1.2  # ft
@@ -49,10 +64,21 @@ class Car:
             # Brake (from neutral to full brake)
             brakeValue = (0.5 - self.throttlePosition) * 2  # Scale to [0, 1]
             self.velocity = max(self.velocity - self.deceleration * dt * brakeValue, 0)
-        if self.currentWheelAngle < 0:
-            self.currentWheelAngle = -min(abs(self.currentWheelAngle), self.calculateMaxSteeringAngle())
+
+        # Forces a min speed
+        if self.passedMin:
+            self.velocity = max(self.velocity, self.minimunVelocity)
         else:
-            self.currentWheelAngle = min(self.currentWheelAngle, self.calculateMaxSteeringAngle())
+            self.velocity = max(self.velocity, self.minVelAch)
+        if not self.passedMin and self.velocity > self.minimunVelocity:
+            self.passedMin = True
+
+        # Update car's wheel angle if it is breaking the calculated max angle based on the new velocity
+        self.maxWheelAngle = self.calculateMaxSteeringAngle()
+        if self.currentWheelAngle < 0:
+                self.currentWheelAngle = max(-self.maxWheelAngle, self.currentWheelAngle)  
+        else:
+                self.currentWheelAngle = min(self.maxWheelAngle, self.currentWheelAngle)  
     
     # Calculate maximum lateral acceleration before losing traction. 
     def calculateMaxLateralAcceleration(self):
@@ -61,7 +87,7 @@ class Car:
         g = 9.81
 
         # Maximum lateral acceleration: a_lat = μ * g + (D / m)
-        lateralAcceleration = (self.coefficientOfFriction * g) + (self.downforceNewtons / (massKG * .05)) # multiplier added to improve user exeperience
+        lateralAcceleration = (self.coefficientOfFriction * g) + (self.downforceNewtons / (massKG * .075)) # multiplier added to improve user exeperience
         return lateralAcceleration  # m/s²
     def calculateTurningRadius(self):
         # Get maximum lateral acceleration
@@ -81,17 +107,20 @@ class Car:
     def calculateMaxSteeringAngle(self):
         turingRadius = self.calculateTurningRadius()
         if turingRadius == 0:
-            return 0
+            return self.maxWheelAngle
         
         # Steering angle in radians: θ = arctan(L / R)
         steeringAngleRadians = math.atan(self.wheelBase / (turingRadius / 0.3048))  # Convert radius to ft
 
-        if steeringAngleRadians > self.maxWheelAngle:
-            return self.maxWheelAngle
+        # Caps the wheel angle to a maxium of 20 degrees
+        if math.degrees(steeringAngleRadians) > 20: 
+            return math.radians(20)
+        else:
+            return steeringAngleRadians
 
-        return steeringAngleRadians
-
-    def updateCarPosition(self, dt):
+    def updateCarPosition(self, dt):  
+        self.updateVelocity(dt)
+      
         if self.velocity > 0 and self.currentWheelAngle != 0:
             turingRadius = self.wheelBase / math.tan(self.currentWheelAngle)
             
@@ -116,6 +145,7 @@ class Car:
         rotatedRect = rotatedCarImage.get_rect(center=(self.carX, self.carY))
 
         screen.blit(rotatedCarImage, rotatedRect.topleft)
+        self.castLines(screen)
 
     def castLine(self, screen, angleOffset=0, maxDistance=500):
         adjustedAngle = self.carAngle + angleOffset
@@ -141,16 +171,14 @@ class Car:
                 # Get the pixel color at the current point
                 color = screen.get_at((currentX, currentY))
 
-                # Check if the color is white
                 if color == white:
                     endX, endY = currentX, currentY
                     break
             else:
-                # Stop if we're outside the screen
                 break
 
-        # Draw a line from the front of the car to the first white pixel (or max distance)
-        pygame.draw.line(screen, (255, 0, 0), (startX, startY), (endX, endY), 2)
+        # ** UNCOMMENT THIS TO SHOW THE RAYS THAT THE COMPUTER SEES **
+        # pygame.draw.line(screen, (255, 0, 0), (startX, startY), (endX, endY), 2)
 
         return math.hypot(endX - startX, endY - startY)
 
@@ -159,8 +187,17 @@ class Car:
         # Cast line straight ahead
         self.frontCast = self.castLine(screen)
 
-        # Cast line 45 degrees to the left
-        self.leftCast = self.castLine(screen, math.radians(-45))
+        # Cast line 90 degrees to the left
+        self.leftCast = self.castLine(screen, math.radians(-90), 100)
+        # Cast line 90 degrees to the right
+        self.rightCast = self.castLine(screen, math.radians(90), 100)
 
+        # Cast line 45 degrees to the left
+        self.left45AngleCast = self.castLine(screen, math.radians(-45), 100)
         # Cast line 45 degrees to the right
-        self.rightCast = self.castLine(screen, math.radians(45))
+        self.right45AngleCast = self.castLine(screen, math.radians(45), 100)
+
+        # Cast line 30 degrees to the left
+        self.left30AngleCast = self.castLine(screen, math.radians(-30), 100)
+        # Cast line 30 degrees to the right
+        self.right30AngleCast = self.castLine(screen, math.radians(30), 100)
