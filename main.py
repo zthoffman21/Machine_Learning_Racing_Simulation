@@ -1,13 +1,17 @@
 #=============================================================
-usingUserTrack = False
+usingExistingTrack = True
 usingCheckpoint = True
 capturingCheckpoints = False
+captureLastGeneration = True
 
-userTrackPath = "images/hardTest.png"
+existingTrackPath = "images/hardTest.png"
 checkpointPath = "checkpoints/neat-checkpoint-128-hardTrack"
-configFile = "configFiles/config1.txt"
+configFiles = [ # Allows user to set multiple config files that will run one after another
+    "configFiles/config1.txt"
+]
 
 checkpointFrequency = 100
+numberOfGenerationsSimulated = 1
 #=============================================================
 import sys
 import pygame
@@ -196,7 +200,7 @@ def evalGenomes(genomes, config):
                         if lapTime < bestLap[0]:
                             bestLap = (lapTime, population.generation, car.genomeID)
                             print(f"{'Best Lap:':<9} {bestLap[0]:<8} {'Generation:':<11} {bestLap[1]:<3} {'Genome ID:':<8} {bestLap[2]:<3}")
-                            bestLapText = bestLapText = pygame.font.Font(None, 30).render((f"{'Best Lap:':<9} {round(bestLap[0], 4):<8} {'Generation:':<11} {bestLap[1]:<3} {'Genome ID:':<8} {bestLap[2]:<3}"), True, (0, 0, 0))
+                            bestLapText = bestLapText = pygame.font.Font(None, 30).render((f"{'Best Lap:':<9} {round(bestLap[0], 5):<8} {'Generation:':<11} {bestLap[1]:<3} {'Genome ID:':<8} {bestLap[2]:<3}"), True, (0, 0, 0))
 
                 if not car.hitFinishLine and not car.leftFinishLine: # Car is not on the finish line but was before
                     car.leftFinishLine = True
@@ -233,14 +237,24 @@ def runNeat():
     # Initialized in runNeat() because I want the best lap time for the model
     global bestLap
     bestLap = (math.inf, 0, 0) 
-    
     global bestLapText
     bestLapText = pygame.font.Font(None, 30).render((f"{'Best Lap:':<9} {round(bestLap[0], 4):<8} {'Generation:':<11} {bestLap[1]:<3} {'Genome ID:':<8} {bestLap[2]:<3}"), True, (0, 0, 0))
 
-    # Run NEAT for 50 generations
-    winner = population.run(evalGenomes, 1000)
+    # Run NEAT for n generations
+    winner = population.run(evalGenomes, numberOfGenerationsSimulated)
     
     print(f"Best genome: {winner}")
+    print((f"{'Best Lap:':<9} {round(bestLap[0], 4):<8} {'Generation:':<11} {bestLap[1]:<3} {'Genome ID:':<8} {bestLap[2]:<3}"), True, (0, 0, 0))
+
+    # Saves the checkpoint after all generations have run
+    if captureLastGeneration:
+        fileName = 'checkpoints/configFile-' + configFile.split("/")[1].replace(".txt","") + "_Time-" + str(round(bestLap[0], 5)) + "_Track-"
+        if usingExistingTrack:
+            fileName += existingTrackPath.split("/")[1].replace(".png", "") + "_Gen-"
+        else:
+            fileName += "userTrack_Gen-"
+        checkpointer = neat.Checkpointer(filename_prefix=fileName)
+        checkpointer.save_checkpoint(config=config, generation=population.generation, population=population, species_set=population.species)
 
 def drawingEvent():
     # Variables to track drawing state
@@ -341,10 +355,10 @@ startButton.fill((255,255,255))
 screen.blit(startButton, (startButtonX, startButtonY))
 pygame.display.flip()
 
-if usingUserTrack:
+if not usingExistingTrack:
     userTrack = screen.copy() # ** USE THIS TO HAVE IT LEARN ON YOUR DRAWN TRACK **
 else:
-    userTrack = pygame.image.load(userTrackPath) # ** USE THIS TO HAVE IT LEARN ON A GIVEN TRACK **
+    userTrack = pygame.image.load(existingTrackPath) # ** USE THIS TO HAVE IT LEARN ON A GIVEN TRACK **
 
 # Creating the masks
 trackMaskSurface = userTrack.convert_alpha()
@@ -360,6 +374,8 @@ finishLineMask = pygame.mask.from_threshold(
 )
 
 if simulating:
-    runNeat()
+    for path in configFiles:
+        configFile = path
+        runNeat()
 
 pygame.quit()
