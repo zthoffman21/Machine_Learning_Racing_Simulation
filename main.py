@@ -153,7 +153,7 @@ def evalGenomes(genomes, config):
     startTime = pygame.time.get_ticks()
 
     # While there are still cars alive and this it is still under the calculated time constraint = ax/(b+x) where a = 30, b = 19, and x = generation
-    while any(not car.crashed for car, _ in cars) and (pygame.time.get_ticks() - startTime) / 1000 < (30 * generation) / (19 + generation ) :
+    while any(not car.crashed for car, _ in cars) and (pygame.time.get_ticks() - startTime) / 1000 < (30 * generation) / (19 + generation) + 2:
         dt = clock.tick(80) / 1000  # Frame time
 
         for event in pygame.event.get():
@@ -237,12 +237,12 @@ def runNeat():
         'config.txt'
     )
     # Create population
-    # population = neat.Checkpointer.restore_checkpoint('checkpoints/neat-checkpoint-128-hardTrack')  # ** USE THIS TO RESTORE FROM CHECKPOINT **
+    # population = neat.Checkpointer.restore_checkpoint('checkpoints/neat-checkpoint-583-hardTrack')  # ** USE THIS TO RESTORE FROM CHECKPOINT **
     population = neat.Population(config) # ** USE THIS TO CREATE A NEW POPULATION **
     population.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     population.add_reporter(stats)
-    population.add_reporter(neat.Checkpointer(100))
+    # population.add_reporter(neat.Checkpointer(100, filename_prefix='checkpoints/'))
 
     # Allows other functions to see the generation number
     global generation 
@@ -313,8 +313,8 @@ startButton.fill((255,255,255))
 screen.blit(startButton, (startButtonX, startButtonY))
 pygame.display.flip()
 
-userTrack = screen.copy() # ** USE THIS TO HAVE IT LEARN ON YOUR DRAWN TRACK **
-# userTrack = pygame.image.load("images/hardTest.png") # ** USE THIS TO HAVE IT LEARN ON A GIVEN TRACK **
+# userTrack = screen.copy() # ** USE THIS TO HAVE IT LEARN ON YOUR DRAWN TRACK **
+userTrack = pygame.image.load("images/hardTest.png") # ** USE THIS TO HAVE IT LEARN ON A GIVEN TRACK **
 track_mask_surface = userTrack.convert_alpha()
 
 outOfBoundsMask = pygame.mask.from_threshold(
