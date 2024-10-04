@@ -6,6 +6,7 @@ class Car:
         # Load the car
         self.f1CarImage = pygame.image.load("images/f1Car.png")
         self.f1CarImage = pygame.transform.scale(self.f1CarImage, (50, 25)) 
+        self.genomeID = None
 
         self.crashed = False
         self.firstLap = False

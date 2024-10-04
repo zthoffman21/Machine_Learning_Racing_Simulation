@@ -1,46 +1,19 @@
+#=============================================================
+usingUserTrack = False
+usingCheckpoint = True
+capturingCheckpoints = False
+
+userTrackPath = "images/hardTest.png"
+checkpointPath = "checkpoints/neat-checkpoint-128-hardTrack"
+configFile = "configFiles/config1.txt"
+
+checkpointFrequency = 100
+#=============================================================
 import sys
 import pygame
 import math
 import neat
 from car import Car
-
-# Initialize Pygame
-pygame.init()
-
-# Set up the display
-screenWidth, screenHeight = 1000, 900
-screen = pygame.display.set_mode((screenWidth, screenHeight))
-pygame.display.set_caption("Racing Line Simulation")
-clock = pygame.time.Clock()
-
-userTrack = screen.copy()
-
-# Set up colors
-white = (255, 255, 255)
-drawingColor = black  = (0, 0, 0)
-darkGreen = (0,100,0)
-lightGreen = (144, 238, 144)
-
-# Set the initial position for the images
-finishLineX = screenWidth/2
-finishLineY = screenHeight * .9 - 50 # 50 = finishLine.height//2
-
-# Load the button 
-startButtonX = screenWidth/2-60
-startButtonY = 30
-startButton = pygame.image.load("images/StartButton.png")
-startButton = pygame.transform.scale(startButton, (120, 50)) 
-startButtonRect = startButton.get_rect(topleft=(startButtonX, startButtonY))
-
-
-# Fill background with white
-screen.fill(white)
-
-# Variables to track drawing state
-drawing = False 
-lastPos = None 
-
-brushRadius = 50  # Default brush size
 
 def drawCircle(screen, color, start, end, radius):
     # Calculate the distance between start and end points
@@ -134,6 +107,10 @@ def fitness(genome, car, dt):
         genome.fitness -= 5000  
 
 def evalGenomes(genomes, config):
+    global bestLap
+    global bestLapText
+    global population
+
     # Initialize cars and networks
     cars = []
     alive = 0
@@ -142,18 +119,17 @@ def evalGenomes(genomes, config):
         genome.fitness = 0
         genome.totalLaps = 0  
         car = Car(screenWidth/2 - 25, screenHeight * .9)
+        car.genomeID = genome_id
         net = neat.nn.FeedForwardNetwork.create(genome, config)
         cars.append((car, genome))
         alive += 1
         networks.append(net)
 
     clock = pygame.time.Clock()
-    global generation
-    generation += 1
     startTime = pygame.time.get_ticks()
 
     # While there are still cars alive and this it is still under the calculated time constraint = ax/(b+x) where a = 30, b = 19, and x = generation
-    while any(not car.crashed for car, _ in cars) and (pygame.time.get_ticks() - startTime) / 1000 < (30 * generation) / (19 + generation) + 2:
+    while any(not car.crashed for car, _ in cars) and (pygame.time.get_ticks() - startTime) / 1000 < (30 * population.generation) / (19 + population.generation) + 3:
         dt = clock.tick(80) / 1000  # Frame time
 
         for event in pygame.event.get():
@@ -162,6 +138,7 @@ def evalGenomes(genomes, config):
                 sys.exit()
 
         screen.blit(userTrack, (0, 0))
+        screen.blit(bestLapText, (3,3))
 
         # Update and draw each car
         for idx, (car, genome) in enumerate(cars):
@@ -216,6 +193,10 @@ def evalGenomes(genomes, config):
                     if car.firstLap:
                         # Prints lap data to the terminal
                         print(f"{'Lap:':<4} {len(car.totalLaps):<8} {'Time:':<5} {lapTime:<25} {'Average:':<8} {sum(car.totalLaps) / len(car.totalLaps):<40}")
+                        if lapTime < bestLap[0]:
+                            bestLap = (lapTime, population.generation, car.genomeID)
+                            print(f"{'Best Lap:':<9} {bestLap[0]:<8} {'Generation:':<11} {bestLap[1]:<3} {'Genome ID:':<8} {bestLap[2]:<3}")
+                            bestLapText = bestLapText = pygame.font.Font(None, 30).render((f"{'Best Lap:':<9} {round(bestLap[0], 4):<8} {'Generation:':<11} {bestLap[1]:<3} {'Genome ID:':<8} {bestLap[2]:<3}"), True, (0, 0, 0))
 
                 if not car.hitFinishLine and not car.leftFinishLine: # Car is not on the finish line but was before
                     car.leftFinishLine = True
@@ -234,151 +215,151 @@ def runNeat():
         neat.DefaultReproduction,
         neat.DefaultSpeciesSet,
         neat.DefaultStagnation,
-        'config.txt'
+        configFile
     )
     # Create population
-    # population = neat.Checkpointer.restore_checkpoint('checkpoints/neat-checkpoint-583-hardTrack')  # ** USE THIS TO RESTORE FROM CHECKPOINT **
-    population = neat.Population(config) # ** USE THIS TO CREATE A NEW POPULATION **
+    global population
+    if usingCheckpoint:
+        population = neat.Checkpointer.restore_checkpoint(checkpointPath)  # ** USE THIS TO RESTORE FROM CHECKPOINT **
+    else:
+        population = neat.Population(config) # ** USE THIS TO CREATE A NEW POPULATION **
     population.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     population.add_reporter(stats)
-    # population.add_reporter(neat.Checkpointer(100, filename_prefix='checkpoints/'))
-
-    # Allows other functions to see the generation number
-    global generation 
-    generation = population.generation
+    if capturingCheckpoints:
+        population.add_reporter(neat.Checkpointer(checkpointFrequency, filename_prefix='checkpoints/'))
+    
+    # Allows other functions to see the bestLap
+    # Initialized in runNeat() because I want the best lap time for the model
+    global bestLap
+    bestLap = (math.inf, 0, 0) 
+    
+    global bestLapText
+    bestLapText = pygame.font.Font(None, 30).render((f"{'Best Lap:':<9} {round(bestLap[0], 4):<8} {'Generation:':<11} {bestLap[1]:<3} {'Genome ID:':<8} {bestLap[2]:<3}"), True, (0, 0, 0))
 
     # Run NEAT for 50 generations
     winner = population.run(evalGenomes, 1000)
     
     print(f"Best genome: {winner}")
 
-# Drawing loop
-drawingEvent = True
-simulating = True
-while drawingEvent:
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            drawingEvent = False
-            simulating = False
-        
-        # Handle color change keys
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_c:
-                screen.fill(white)  # Clear screen on 'C' key press
-            # Change brush size on '1-5' key press
-            elif event.key == pygame.K_1:
-                brushRadius = 10
-            elif event.key == pygame.K_2:
-                brushRadius = 20
-            elif event.key == pygame.K_3:
-                brushRadius = 30
-            elif event.key == pygame.K_4:
-                brushRadius = 40
-            elif event.key == pygame.K_5:
-                brushRadius = 50
+def drawingEvent():
+    # Variables to track drawing state
+    drawing = False 
+    lastPos = None 
+    brushRadius = 50  # Default brush size
 
-        # Start drawing when mouse button is pressed
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if startButtonRect.collidepoint(event.pos):
-                # Button clicked, transition to simulation
+    # Drawing loop
+    drawingEvent = True
+    while drawingEvent:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
                 drawingEvent = False
-            else: 
-                drawing = True
-                lastPos = event.pos
+                return False
+            
+            # Handle color change keys
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_c:
+                    screen.fill(white)  # Clear screen on 'C' key press
+                # Change brush size on '1-5' key press
+                elif event.key == pygame.K_1:
+                    brushRadius = 10
+                elif event.key == pygame.K_2:
+                    brushRadius = 20
+                elif event.key == pygame.K_3:
+                    brushRadius = 30
+                elif event.key == pygame.K_4:
+                    brushRadius = 40
+                elif event.key == pygame.K_5:
+                    brushRadius = 50
 
-        # Stop drawing when mouse button is released
-        if event.type == pygame.MOUSEBUTTONUP:
-            drawing = False
+            # Start drawing when mouse button is pressed
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if startButtonRect.collidepoint(event.pos):
+                    # Button clicked, transition to simulation
+                    drawingEvent = False
+                else: 
+                    drawing = True
+                    lastPos = event.pos
 
-        # Track mouse movement to draw circles
-        if event.type == pygame.MOUSEMOTION and drawing:
-            currentPos = event.pos
-            if lastPos:
-                # Draw smooth circles instead of lines
-                drawCircle(screen, drawingColor, lastPos, currentPos, brushRadius)
-            lastPos = currentPos
+            # Stop drawing when mouse button is released
+            if event.type == pygame.MOUSEBUTTONUP:
+                drawing = False
 
-    # Draw the images
-    drawFinishLine(finishLineX, finishLineY, 30, 100, 3)  # x, y, width, height, number of boxes
+            # Track mouse movement to draw circles
+            if event.type == pygame.MOUSEMOTION and drawing:
+                currentPos = event.pos
+                if lastPos:
+                    # Draw smooth circles instead of lines
+                    drawCircle(screen, drawingColor, lastPos, currentPos, brushRadius)
+                lastPos = currentPos
 
-    # Draw start button to screen
-    screen.blit(startButton, (startButtonX, startButtonY))
+        # Draw the images
+        drawFinishLine(finishLineX, finishLineY, 30, 100, 3)  # x, y, width, height, number of boxes
 
-    # Update the display
-    pygame.display.flip()
-    
+        # Draw start button to screen
+        screen.blit(startButton, (startButtonX, startButtonY))
+
+        # Update the display
+        pygame.display.flip()
+    return True
+
+# Initialize Pygame
+pygame.init()
+
+# Set up the display
+screenWidth, screenHeight = 1000, 900
+screen = pygame.display.set_mode((screenWidth, screenHeight))
+pygame.display.set_caption("Racing Line Simulation")
+clock = pygame.time.Clock()
+userTrack = screen.copy()
+
+# Set up colors
+white = (255, 255, 255)
+drawingColor = black  = (0, 0, 0)
+darkGreen = (0,100,0)
+lightGreen = (144, 238, 144)
+
+# Set the initial position for the images
+finishLineX = screenWidth/2
+finishLineY = screenHeight * .9 - 50 # 50 = finishLine.height//2
+
+# Load the button 
+startButtonX = screenWidth/2-60
+startButtonY = 30
+startButton = pygame.image.load("images/StartButton.png")
+startButton = pygame.transform.scale(startButton, (120, 50)) 
+startButtonRect = startButton.get_rect(topleft=(startButtonX, startButtonY))
+
+
+# Fill background with white
+screen.fill(white)
+
+simulating = drawingEvent() # Flag if the user wants to simulate
+
 # Save User's track
 startButton.fill((255,255,255))
 screen.blit(startButton, (startButtonX, startButtonY))
 pygame.display.flip()
 
-# userTrack = screen.copy() # ** USE THIS TO HAVE IT LEARN ON YOUR DRAWN TRACK **
-userTrack = pygame.image.load("images/hardTest.png") # ** USE THIS TO HAVE IT LEARN ON A GIVEN TRACK **
-track_mask_surface = userTrack.convert_alpha()
+if usingUserTrack:
+    userTrack = screen.copy() # ** USE THIS TO HAVE IT LEARN ON YOUR DRAWN TRACK **
+else:
+    userTrack = pygame.image.load(userTrackPath) # ** USE THIS TO HAVE IT LEARN ON A GIVEN TRACK **
 
+# Creating the masks
+trackMaskSurface = userTrack.convert_alpha()
 outOfBoundsMask = pygame.mask.from_threshold(
-    track_mask_surface,
+    trackMaskSurface,
     (255, 255, 255, 255),   # Color to match (white)
     (1, 1, 1, 255)           # Tolerance
 )
 finishLineMask = pygame.mask.from_threshold(
-    track_mask_surface, 
+    trackMaskSurface, 
     (144, 238, 144, 255),
     (1, 1, 1, 255)
 )
 
-# COMMENT THIS OUT TO CONTROL THE CAR YOURSELF
 if simulating:
     runNeat()
-
-# ** UNCOMMENT THIS BLOCK TO CONTROL A CAR YOURSELF **
-# test = Car(screenWidth/2 - 25, screenHeight * .9)
-# while simulating:
-#     dt = clock.tick(60) / 1000 # Get the change in time between framesa
-
-#     for event in pygame.event.get():
-#         if event.type == pygame.QUIT:
-#             simulating = False
-
-#         if event.type == pygame.KEYDOWN:
-#             if event.key == pygame.K_w:
-#                 test.throttlePosition = min(test.throttlePosition + .1, 1)
-#             elif event.key == pygame.K_s:
-#                 test.throttlePosition = max(test.throttlePosition - .1, 0)
-#             elif event.key == pygame.K_a:
-#                 test.currentWheelAngle = max(test.currentWheelAngle - math.radians(3), -test.calculateMaxSteeringAngle())
-#             elif event.key == pygame.K_d:
-#                 test.currentWheelAngle = min(test.currentWheelAngle + math.radians(3), test.calculateMaxSteeringAngle())
-    
-#     screen.blit(userTrack, (0,0))
-#     # Update car
-#     test.updateVelocity(dt)
-#     test.updateCarPosition(dt)
-#     test.displayCar(screen)
-
-#     # Check if car hits finish line
-#     if checkCollisionWithFinishLine(test) and test.leftFinishLine: # Car is on the finish line and wasn't the frame before
-#         # Update lap data
-#         lapTime = pygame.time.get_ticks() / 1000 - test.lapStart 
-#         test.totalLaps.append(lapTime)
-#         test.lapStart = pygame.time.get_ticks() / 1000
-#         test.leftFinishLine = False
-
-#         if len(test.totalLaps) > 1 and not test.firstLap: 
-#             test.firstLap = True
-#             del test.totalLaps[0]
-#         if test.firstLap:
-#             # Prints lap data to the terminal
-#             print(f"{'Lap:':<4} {len(test.totalLaps):<8} {'Time:':<5} {lapTime:<25} {'Average:':<8} {sum(test.totalLaps) / len(test.totalLaps):<40}")
-
-#     if not test.hitFinishLine and not test.leftFinishLine: # Car is not on the finish line but was before
-#         test.leftFinishLine = True
-
-#     # Update the display
-#     pygame.display.flip()
-
-#     # Cap frame rate
-#     clock.tick(60)
 
 pygame.quit()
