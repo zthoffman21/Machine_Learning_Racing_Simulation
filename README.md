@@ -1,6 +1,6 @@
 # Racing Line Simulation
 
-![image](https://github.com/user-attachments/assets/5953da9b-7544-496c-852d-2fa82c174137)
+![Untitled video - Made with Clipchamp](https://github.com/user-attachments/assets/4ca511d2-efd4-4689-a167-e625abfc2d75)
 
 ## Project Overview
 This project is a racing line simulation that allows users to draw a track and optimizes the best racing line using machine learning. The simulation incorporates realistic car physics, including velocity, steering angles, and collision detection, to determine the best path around the track.
