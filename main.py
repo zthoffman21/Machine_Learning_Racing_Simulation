@@ -1,23 +1,35 @@
-#=============================================================
+import sys
+import pygame
+import math
+import random
+import neat
+from car import Car
+
+
+#====================================================================================================
 usingExistingTrack = True
-usingCheckpoint = True
-capturingCheckpoints = False
+usingCheckpoint = False
+capturingCheckpoints = True
 captureLastGeneration = True
 
 existingTrackPath = "images/hardTest.png"
-checkpointPath = "checkpoints/neat-checkpoint-128-hardTrack"
+checkpointPath = "checkpoints/configFile-configpartial_direct_Time-6.827_Track-hardTest_Gen-50"
 configFiles = [ # Allows user to set multiple config files that will run one after another
     "configFiles/config1.txt"
 ]
 
-checkpointFrequency = 100
-numberOfGenerationsSimulated = 1
-#=============================================================
-import sys
-import pygame
-import math
-import neat
-from car import Car
+checkpointFrequency = 50
+numberOfGenerationsSimulated = 200
+#====================================================================================================
+# CAR COLOR OPTIONS
+redCar = pygame.transform.scale(pygame.image.load("images/f1CarRed.png"), (50, 25))
+blueCar = pygame.transform.scale(pygame.image.load("images/f1CarBlue.png"), (50, 25))
+greenCar = pygame.transform.scale(pygame.image.load("images/f1CarGreen.png"), (50, 25))
+yellowCar = pygame.transform.scale(pygame.image.load("images/f1CarYellow.png"), (50, 25))
+carOptions = [redCar, blueCar, greenCar, yellowCar]
+#====================================================================================================
+
+
 
 def drawCircle(screen, color, start, end, radius):
     # Calculate the distance between start and end points
@@ -88,23 +100,21 @@ def drawFinishLine(x, y, width, height, numBoxes):
 
 def fitness(genome, car, dt):
     # Encourage cars to move forward by rewarding based on their velocity
-    genome.fitness += car.velocity * dt * 10  # Scale factor can be adjusted
+    genome.fitness += car.velocity * dt * 15  # Scale factor can be adjusted
 
     total = len(car.totalLaps)
     # Provide a significant bonus when a car completes a lap
     if total > genome.totalLaps:
         genome.totalLaps = total
-        genome.fitness += 1000
-
-    # Encourage maintaining higher speeds even if a lap isn't completed
-    if total == genome.totalLaps:
-        genome.fitness += car.velocity * dt * 5
+        genome.fitness += 5000 / car.totalLaps[total-1]
+        genome.fitness += car.totalLaps[total-1] - sum(car.totalLaps)/total * 1000
 
     # Discourage cars from getting too close to out-of-bounds areas
     if car.frontCast < 20:
         genome.fitness -= (20 - car.frontCast) * 10 
     else:
         genome.fitness += car.velocity * dt
+
 
     # Penalize for crashing
     if car.crashed:
@@ -114,6 +124,7 @@ def evalGenomes(genomes, config):
     global bestLap
     global bestLapText
     global population
+    global fastestGenome
 
     # Initialize cars and networks
     cars = []
@@ -122,12 +133,16 @@ def evalGenomes(genomes, config):
     for genome_id, genome in genomes:
         genome.fitness = 0
         genome.totalLaps = 0  
-        car = Car(screenWidth/2 - 25, screenHeight * .9)
+        car = Car(screenWidth/2 - 25, screenHeight * .9, carOptions[random.randint(0,2)])
         car.genomeID = genome_id
         net = neat.nn.FeedForwardNetwork.create(genome, config)
         cars.append((car, genome))
         alive += 1
         networks.append(net)
+
+    if fastestGenome != None:        
+        cars[0] = (cars[0][0], fastestGenome)
+        cars[0][0].f1CarImage = carOptions[3]
 
     clock = pygame.time.Clock()
     startTime = pygame.time.get_ticks()
@@ -198,7 +213,11 @@ def evalGenomes(genomes, config):
                         # Prints lap data to the terminal
                         print(f"{'Lap:':<4} {len(car.totalLaps):<8} {'Time:':<5} {lapTime:<25} {'Average:':<8} {sum(car.totalLaps) / len(car.totalLaps):<40}")
                         if lapTime < bestLap[0]:
+                            car.f1CarImage =  carOptions[3]
                             bestLap = (lapTime, population.generation, car.genomeID)
+                            fastestGenome = genome
+                            genome.fitness += 5000
+
                             print(f"{'Best Lap:':<9} {bestLap[0]:<8} {'Generation:':<11} {bestLap[1]:<3} {'Genome ID:':<8} {bestLap[2]:<3}")
                             bestLapText = bestLapText = pygame.font.Font(None, 30).render((f"{'Best Lap:':<9} {round(bestLap[0], 5):<8} {'Generation:':<11} {bestLap[1]:<3} {'Genome ID:':<8} {bestLap[2]:<3}"), True, (0, 0, 0))
 
@@ -225,6 +244,8 @@ def runNeat():
     global population
     if usingCheckpoint:
         population = neat.Checkpointer.restore_checkpoint(checkpointPath)  # ** USE THIS TO RESTORE FROM CHECKPOINT **
+        if str(type(population.population)) == "<class 'neat.population.Population'>":
+            population = population.population
     else:
         population = neat.Population(config) # ** USE THIS TO CREATE A NEW POPULATION **
     population.add_reporter(neat.StdOutReporter(True))
@@ -239,6 +260,8 @@ def runNeat():
     bestLap = (math.inf, 0, 0) 
     global bestLapText
     bestLapText = pygame.font.Font(None, 30).render((f"{'Best Lap:':<9} {round(bestLap[0], 4):<8} {'Generation:':<11} {bestLap[1]:<3} {'Genome ID:':<8} {bestLap[2]:<3}"), True, (0, 0, 0))
+    global fastestGenome 
+    fastestGenome = None
 
     # Run NEAT for n generations
     winner = population.run(evalGenomes, numberOfGenerationsSimulated)

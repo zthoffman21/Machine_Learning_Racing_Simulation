@@ -2,10 +2,9 @@ import pygame
 import math
 
 class Car: 
-    def __init__(self, x, y):
+    def __init__(self, x, y, carColor):
         # Load the car
-        self.f1CarImage = pygame.image.load("images/f1Car.png")
-        self.f1CarImage = pygame.transform.scale(self.f1CarImage, (50, 25)) 
+        self.f1CarImage = carColor
         self.genomeID = None
 
         self.crashed = False
@@ -157,30 +156,37 @@ class Car:
 
         white = (255, 255, 255)
 
+        width = screen.get_width()
+        height = screen.get_height()
+
         startX = self.carX
         startY = self.carY
         endX, endY = startX, startY
 
-        # Move along the direction vector, checking for white pixels
-        for i in range(maxDistance):
+        # Binary search to find the collision distance
+        low = 0
+        high = maxDistance
+        while low <= high:
+            mid = (low + high) // 2
+
             # Calculate the next point along the line
-            currentX = int(startX + directionX * i)
-            currentY = int(startY + directionY * i)
+            currentX = int(startX + directionX * mid)
+            currentY = int(startY + directionY * mid)
 
-            # Check if the point is within the screen bounds
-            if 0 <= currentX < screen.get_width() and 0 <= currentY < screen.get_height():
-                # Get the pixel color at the current point
+            # If x,y is in bounds
+            if 0 <= currentX < width and 0 <= currentY < height:
                 color = screen.get_at((currentX, currentY))
-
                 if color == white:
-                    endX, endY = currentX, currentY
-                    break
+                    # Collision detected 
+                    high = mid - 1
+                else:
+                    # No collision
+                    low = mid + 1
             else:
-                break
-
-        # ** UNCOMMENT THIS TO SHOW THE RAYS THAT THE COMPUTER SEES **
-        # pygame.draw.line(screen, (255, 0, 0), (startX, startY), (endX, endY), 2)
-
+                high = mid - 1
+        endX = int(startX + directionX * high)
+        endY = int(startY + directionY * high)
+        
         return math.hypot(endX - startX, endY - startY)
 
     # Wrapper function to cast all three lines (front, left, right)
