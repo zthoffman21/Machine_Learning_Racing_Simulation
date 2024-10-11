@@ -1,6 +1,6 @@
 # Racing Line Simulation
 
-![Untitled video - Made with Clipchamp](https://github.com/user-attachments/assets/4ca511d2-efd4-4689-a167-e625abfc2d75)
+![Untitled video - Made with Clipchamp](https://github.com/user-attachments/assets/ede30565-4b20-4fa8-9a8c-11a0ea0f2908)
 
 ## Project Overview
 This project is a racing line simulation that allows users to draw a track and optimizes the best racing line using machine learning. The simulation incorporates realistic car physics, including velocity, steering angles, and collision detection, to determine the best path around the track.
@@ -23,8 +23,8 @@ This project is a racing line simulation that allows users to draw a track and o
 * Track Drawing: Users can interactively draw custom tracks that the AI will then attempt to optimize the racing line for.
 
 ## Planned Features
-* UI Enhancements: A more intuitive user interface is planned to allow users to easily draw tracks, view real-time simulation data, and adjust parameters.
-* Performance Optimization: Further optimization of car physics and NEAT training to speed up convergence and improve overall racing line accuracy.
+* UI Enhancements: A more intuitive user interface is planned to allow users to view real-time simulation data and adjust parameters.
+* Performance Optimization: Further optimization of car physics and NEAT training to speed up convergence and improve lap times.
 
 ## How to Run
 1. Clone the repository.
