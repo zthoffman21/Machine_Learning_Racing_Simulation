@@ -31,6 +31,7 @@ class Car:
         self.carX = x
         self.carY = y
         self.carAngle = 0  # Angle in relation to the screen (radians)
+        self.angularVelocity = 0
         self.currentWheelAngle = 0
         self.maxWheelAngle = math.radians(20)
 
@@ -53,9 +54,9 @@ class Car:
         # Kinematic properties
         self.velocity = 0  # ft/s
         self.minimunVelocity = 200
+        self.maxVelocityAchieved = 0
         self.maxVelocity = 330 * 1.3  # ft/s (~225 mph)
         self.passedMin = False
-        self.minVelAch = 0
 
         self.torque = 1000  # lb-ft
         self.brakingPower = 30000  # Reflects braking forces of 4-5 Gs
@@ -81,15 +82,19 @@ class Car:
         if self.passedMin:
             self.velocity = max(self.velocity, self.minimunVelocity)
         else:
-            self.velocity = max(self.velocity, self.minVelAch)
-        if not self.passedMin and self.velocity > self.minimunVelocity:
-            self.passedMin = True
+            self.velocity = max(self.velocity, self.maxVelocityAchieved)
+            if self.velocity > self.minimunVelocity:
+                self.passedMin = True
 
         self.maxWheelAngle = self.calculateMaxSteeringAngle()
         if self.currentWheelAngle < 0:
             self.currentWheelAngle = max(-self.maxWheelAngle, self.currentWheelAngle)
         else:
             self.currentWheelAngle = min(self.maxWheelAngle, self.currentWheelAngle)
+
+        if self.velocity > self.maxVelocityAchieved:
+            self.maxVelocityAchieved = self.velocity
+
 
     def calculateMaxLateralAcceleration(self):
         """
@@ -144,12 +149,12 @@ class Car:
 
         if self.velocity > 0 and self.currentWheelAngle != 0:
             turningRadius = self.wheelBase / math.tan(self.currentWheelAngle)
-            angularVelocity = self.velocity / turningRadius
+            self.angularVelocity = self.velocity / turningRadius
         else:
-            angularVelocity = 0
+            self.angularVelocity = 0
 
-        if angularVelocity != 0:
-            self.carAngle += angularVelocity * dt
+        if self.angularVelocity != 0:
+            self.carAngle += self.angularVelocity * dt
 
         self.carX += self.velocity * math.cos(self.carAngle) * dt
         self.carY += self.velocity * math.sin(self.carAngle) * dt
@@ -165,9 +170,11 @@ class Car:
         rotatedRect = rotatedCarImage.get_rect(center=(self.carX, self.carY))
         screen.blit(rotatedCarImage, rotatedRect.topleft)
 
-    def castLine(self, screen, angleOffset=0, maxDistance=500):
+    def castLine(self, screen, pixelArray, angleOffset=0, maxDistance=500):
         """
         Casts a line from the car to detect edges of the track.
+        I had tried to optimize by using a binary search approach, however, this caused the sensor to jump over track boundaries and into other parts of the track leading to incorrect 
+        ouputs. So, iterative is the only way to ensure accuracy, but a step method is used to help reduce iterations and increase efficiency. 
 
         Args:
             screen: The pygame surface to use.
@@ -187,8 +194,6 @@ class Car:
         startX = self.carX
         startY = self.carY
 
-        # Get the pixel array
-        pixelArray = pygame.surfarray.pixels2d(screen)
         step = 10
 
         distance = 0
@@ -225,17 +230,17 @@ class Car:
 
         return distance
 
-    def castLines(self, screen):
+    def castLines(self, screen, pixelArray):
         """
         Casts multiple lines (sensors) from the car in different directions.
 
         Args:
             screen: The pygame surface to use.
         """
-        self.frontCast = self.castLine(screen)
-        self.leftCast = self.castLine(screen, math.radians(-90), 300)
-        self.rightCast = self.castLine(screen, math.radians(90), 300)
-        self.left45AngleCast = self.castLine(screen, math.radians(-45), 300)
-        self.right45AngleCast = self.castLine(screen, math.radians(45), 300)
-        self.left30AngleCast = self.castLine(screen, math.radians(-30), 300)
-        self.right30AngleCast = self.castLine(screen, math.radians(30), 300)
+        self.frontCast = self.castLine(screen, pixelArray)
+        self.leftCast = self.castLine(screen, pixelArray, math.radians(-90), 300)
+        self.rightCast = self.castLine(screen, pixelArray, math.radians(90), 300)
+        self.left45AngleCast = self.castLine(screen, pixelArray, math.radians(-45), 300)
+        self.right45AngleCast = self.castLine(screen, pixelArray, math.radians(45), 300)
+        self.left30AngleCast = self.castLine(screen, pixelArray, math.radians(-30), 300)
+        self.right30AngleCast = self.castLine(screen, pixelArray, math.radians(30), 300)

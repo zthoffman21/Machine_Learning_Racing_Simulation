@@ -13,12 +13,12 @@ capturingCheckpoints = False
 captureLastGeneration = False
 
 existingTrackPath = "images/hardTest.png"
-checkpointPath = "checkpoints/50"
+checkpointPath = "checkpoints/9"
 configFiles = [  # Allows user to set multiple config files that will run one after another
     "configFiles/config1.txt"
 ]
 
-checkpointFrequency = 50
+checkpointFrequency = 10
 numberOfGenerationsSimulated = 200
 #====================================================================================================
 # CAR COLOR OPTIONS
@@ -107,35 +107,30 @@ def drawFinishLine(x, y, width, height, numBoxes):
 def fitness(genome, car, dt):
     """
     Calculates and updates the fitness of a genome based on the car's performance.
+    From extensive testing, this simple fitness function seems to promote the fastest lap times because the main contributing factor are its lap times themselves. 
+    However, the velocity bonus is needed so the cars are promoted to completed their first lap fast or else the ones that complete the first lap will go slowly and then 
+    they will breed only slow cars giving an endless cycle. The other is a simple survival bonus needed because withtout it, the cars run into a wall endlessly or until one luckily 
+    turns the corner. 
 
     Args:
         genome: The genome being evaluated.
         car: The car object.
         dt: Delta time since last frame.
     """
-    # Base fitness to prevent negative starting fitness
-    genome.fitness += 1
 
-    # Reward for moving forward (scaled by velocity)
-    speed_reward = (car.velocity / car.maxVelocity) * dt * 50
-    genome.fitness += speed_reward
+    genome.fitness += car.velocity * dt * 0.01
+    genome.fitness += 10
 
-    # Penalize for crashing
-    if car.crashed:
-        genome.fitness -= 100  # Reduced penalty
-
-    # Reward for completing a lap quickly
     if car.completedLap:
-        genome.fitness += 5000 /  car.totalLaps[-1]  
+        genome.fitness += 10000 / car.totalLaps[-1]
         car.completedLap = False
 
-    # Mild penalty for excessive steering
-    steering_penalty = (abs(car.currentWheelAngle) / car.maxWheelAngle) * dt * 5
-    genome.fitness -= steering_penalty
 
 def evalGenomes(genomes, config):
     """
     Evaluates each genome in the population.
+    During testing, I tried normalizing the inputs, but that seemed to make the cars worse. I believe this is because the front sensor is the most important, and when it is normalized, its magnitude,
+    and thus impact is reduced.  
 
     Args:
         genomes: List of genomes to evaluate.
@@ -182,7 +177,7 @@ def evalGenomes(genomes, config):
         # Update and draw each car
         for idx, (car, genome) in enumerate(cars):
             if not car.crashed:
-                car.castLines(screen)
+                car.castLines(screen, pixelArray)
 
                 inputs = [
                     car.frontCast,
@@ -405,9 +400,12 @@ finishLineMask = pygame.mask.from_threshold(
     trackMaskSurface, (144, 238, 144, 255), (1, 1, 1, 255)
 )
 
+pixelArray = pygame.surfarray.array2d(trackMaskSurface)
+
 if simulating:
     for path in configFiles:
         configFile = path
         runNeat()
 
+del pixelArray
 pygame.quit()
