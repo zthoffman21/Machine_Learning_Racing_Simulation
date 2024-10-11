@@ -7,18 +7,18 @@ from car import Car
 
 #====================================================================================================
 # Configuration Parameters
-usingExistingTrack = True
-usingCheckpoint = False
+usingExistingTrack = False
+usingCheckpoint = True
 capturingCheckpoints = False
 captureLastGeneration = False
 
 existingTrackPath = "images/hardTest.png"
-checkpointPath = "checkpoints/9"
+checkpointPath = "checkpoints/50"
 configFiles = [  # Allows user to set multiple config files that will run one after another
     "configFiles/config1.txt"
 ]
 
-checkpointFrequency = 10
+checkpointFrequency = 50
 numberOfGenerationsSimulated = 200
 #====================================================================================================
 # CAR COLOR OPTIONS
@@ -213,7 +213,7 @@ def evalGenomes(genomes, config):
                     alive -= 1
 
                 # Check for finish line crossing
-                if checkCollisionWithFinishLine(car) and car.leftFinishLine:
+                if math.cos(car.carAngle) > 0 and checkCollisionWithFinishLine(car) and car.leftFinishLine :
                     lapTime = pygame.time.get_ticks() / 1000 - car.lapStart
                     car.totalLaps.append(lapTime)
                     car.lapStart = pygame.time.get_ticks() / 1000
