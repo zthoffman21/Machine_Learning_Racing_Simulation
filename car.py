@@ -31,7 +31,6 @@ class Car:
         self.carX = x
         self.carY = y
         self.carAngle = 0  # Angle in relation to the screen (radians)
-        self.angularVelocity = 0
         self.currentWheelAngle = 0
         self.maxWheelAngle = math.radians(20)
 
@@ -149,12 +148,12 @@ class Car:
 
         if self.velocity > 0 and self.currentWheelAngle != 0:
             turningRadius = self.wheelBase / math.tan(self.currentWheelAngle)
-            self.angularVelocity = self.velocity / turningRadius
+            angularVelocity = self.velocity / turningRadius
         else:
-            self.angularVelocity = 0
+            angularVelocity = 0
 
-        if self.angularVelocity != 0:
-            self.carAngle += self.angularVelocity * dt
+        if angularVelocity != 0:
+            self.carAngle += angularVelocity * dt
 
         self.carX += self.velocity * math.cos(self.carAngle) * dt
         self.carY += self.velocity * math.sin(self.carAngle) * dt

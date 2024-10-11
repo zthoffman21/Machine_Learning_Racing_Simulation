@@ -7,13 +7,13 @@ from car import Car
 
 #====================================================================================================
 # Configuration Parameters
-usingExistingTrack = False
+usingExistingTrack = True
 usingCheckpoint = True
 capturingCheckpoints = False
 captureLastGeneration = False
 
 existingTrackPath = "images/hardTest.png"
-checkpointPath = "checkpoints/50"
+checkpointPath = "checkpoints/50-6.51"
 configFiles = [  # Allows user to set multiple config files that will run one after another
     "configFiles/config1.txt"
 ]
