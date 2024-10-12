@@ -8,7 +8,7 @@ from car import Car
 #====================================================================================================
 # Configuration Parameters
 usingExistingTrack = False
-usingCheckpoint = True
+usingCheckpoint = False
 capturingCheckpoints = False
 captureLastGeneration = False
 
@@ -333,7 +333,7 @@ def drawingEvent():
     """
     Handles the drawing event where the user can draw the track.
     """
-    global screen, initialCarX, initialCarY, screenWidth, screenHeight, finishLineX, finishLineY, startButtonX, startButtonY, startButtonRect
+    global screen, initialCarX, initialCarY, screenWidth, screenHeight, finishLineX, finishLineY, startButtonX, startButtonY, startButtonRect, drawingColor
 
     drawing = False
     lastPos = None
@@ -373,6 +373,10 @@ def drawingEvent():
                     brushRadius = 40
                 elif event.key == pygame.K_5:
                     brushRadius = 50
+                elif event.key == pygame.K_b:
+                    drawingColor = black
+                elif event.key == pygame.K_w:
+                    drawingColor = white
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if startButtonRect.collidepoint(event.pos):
@@ -409,6 +413,7 @@ clock = pygame.time.Clock()
 userTrack = screen.copy()
 
 # Set up colors
+global drawingColor
 white = (255, 255, 255)
 drawingColor = black = (0, 0, 0)
 darkGreen = (0, 100, 0)
