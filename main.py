@@ -7,13 +7,13 @@ from car import Car
 
 #====================================================================================================
 # Configuration Parameters
-usingExistingTrack = True
-usingCheckpoint = True
+usingExistingTrack = False
+usingCheckpoint = False
 capturingCheckpoints = False
 captureLastGeneration = False
 
 existingTrackPath = "images/hardTest.png"
-checkpointPath = "checkpoints/50-6.51"
+checkpointPath = "checkpoints/129-6.43"
 configFiles = [  # Allows user to set multiple config files that will run one after another
     "configFiles/config1.txt"
 ]
@@ -136,10 +136,15 @@ def evalGenomes(genomes, config):
         genomes: List of genomes to evaluate.
         config: NEAT configuration.
     """
+    global font
     global bestLap
     global bestLapText
+    global bestFirstLap
+    global bestFirstLapText
     global population
     global fastestGenome
+    global initialCarX
+    global initialCarY
 
     # Initialize cars and networks
     cars = []
@@ -147,7 +152,7 @@ def evalGenomes(genomes, config):
     networks = []
     for genome_id, genome in genomes:
         genome.fitness = 0
-        car = Car(screenWidth / 2 - 23, screenHeight * 0.9, random.choice(carOptions[:3]))
+        car = Car(initialCarX, initialCarY, random.choice(carOptions[:3]))
         car.genomeID = genome_id
         net = neat.nn.FeedForwardNetwork.create(genome, config)
         cars.append((car, genome))
@@ -172,7 +177,8 @@ def evalGenomes(genomes, config):
                 sys.exit()
 
         screen.blit(userTrack, (0, 0))
-        screen.blit(bestLapText, (3, 3))
+        screen.blit(bestLapText, (10, 3))
+        screen.blit(bestFirstLapText, (10, 3 + bestLapText.get_height() + 5))
 
         # Update and draw each car
         for idx, (car, genome) in enumerate(cars):
@@ -227,8 +233,20 @@ def evalGenomes(genomes, config):
                         fastestGenome = genome
                         genome.fitness += 5000
                         print(f"Best Lap: {bestLap[0]:.2f} Generation: {bestLap[1]} Genome ID: {bestLap[2]}")
-                        bestLapText = pygame.font.Font(None, 30).render(
-                            f"Best Lap: {bestLap[0]:.2f} Generation: {bestLap[1]} Genome ID: {bestLap[2]}", True, (0, 0, 0)
+                        bestLapText = font.render(
+                            f"{'Best Lap:':>15} {bestLap[0]:<6.2f}  Generation: {bestLap[1]:<4}  Genome ID: {bestLap[2]:<8}",
+                            True, 
+                            (0, 0, 0)
+                        )
+                    if len(car.totalLaps) == 1 and lapTime < bestFirstLap[0]:
+                        car.f1CarImage = carOptions[3]
+                        bestFirstLap = (lapTime, population.generation, car.genomeID)
+                        genome.fitness += 2000
+                        print(f"Best First Lap: {bestFirstLap[0]:.2f} Generation: {bestFirstLap[1]} Genome ID: {bestFirstLap[2]}")
+                        bestFirstLapText = font.render(
+                            f"{'Best First Lap:':>15} {bestFirstLap[0]:<6.2f}  Generation: {bestFirstLap[1]:<4}  Genome ID: {bestFirstLap[2]:<8}",
+                            True, 
+                            (0, 0, 0)
                         )
 
                 if not car.hitFinishLine and not car.leftFinishLine:
@@ -237,6 +255,9 @@ def evalGenomes(genomes, config):
                 # Calculate fitness
                 fitness(genome, car, dt)
 
+        # Display the fastest on top of the others so it can always be seen
+        if fastestGenome is not None and not cars[0][0].crashed:
+            cars[0][0].displayCar(screen)
         pygame.display.flip()
 
     print("Number of cars survived:", alive)
@@ -265,12 +286,26 @@ def runNeat():
     if capturingCheckpoints:
         population.add_reporter(neat.Checkpointer(checkpointFrequency, filename_prefix='checkpoints/'))
 
+    global font
+    font = pygame.font.SysFont("Lucida Console", 17)
     global bestLap
     bestLap = (math.inf, 0, 0)
     global bestLapText
-    bestLapText = pygame.font.Font(None, 30).render(
-        f"Best Lap: {bestLap[0]:.2f} Generation: {bestLap[1]} Genome ID: {bestLap[2]}", True, (0, 0, 0)
+    bestLapText = font.render(
+        f"{'Best Lap:':>15} {bestLap[0]:<6.2f}  Generation: {bestLap[1]:<4}  Genome ID: {bestLap[2]:<8}",
+        True, 
+        (0, 0, 0)
     )
+
+    global bestFirstLap
+    bestFirstLap = (math.inf, 0, 0)
+    global bestFirstLapText
+    bestFirstLapText = font.render(
+        f"{'Best First Lap:':>15} {bestFirstLap[0]:<6.2f}  Generation: {bestFirstLap[1]:<4}  Genome ID: {bestFirstLap[2]:<8}",
+        True, 
+        (0, 0, 0)
+    )
+
     global fastestGenome
     fastestGenome = None
 
@@ -278,6 +313,8 @@ def runNeat():
 
     print(f"Best genome: {winner}")
     print(f"Best Lap: {bestLap[0]:.2f} Generation: {bestLap[1]} Genome ID: {bestLap[2]}")
+    print(f"Best First Lap: {bestFirstLap[0]:.2f} Generation: {bestFirstLap[1]} Genome ID: {bestFirstLap[2]}")
+
 
     if captureLastGeneration:
         fileName = (
@@ -303,6 +340,17 @@ def drawingEvent():
     """
     Handles the drawing event where the user can draw the track.
     """
+    global screen
+    global initialCarX
+    global initialCarY
+    global screenWidth
+    global screenHeight
+    global finishLineX
+    global finishLineY
+    global startButtonX
+    global startButtonY
+    global startButtonRect
+
     drawing = False
     lastPos = None
     brushRadius = 50
@@ -313,6 +361,20 @@ def drawingEvent():
             if event.type == pygame.QUIT:
                 drawingEvent = False
                 return False
+            
+            if event.type == pygame.VIDEORESIZE:
+                # Update the screen size to the new window size
+                screenWidth, screenHeight = event.w, event.h
+                screen = pygame.display.set_mode((screenWidth, screenHeight), pygame.RESIZABLE)
+                screen.fill(white)
+                startButtonX = screenWidth / 2 - 60
+                startButtonY = 30
+                startButtonRect = startButton.get_rect(topleft=(startButtonX, startButtonY))
+                # Set the initial position for the images
+                finishLineX = screenWidth / 2
+                finishLineY = screenHeight * 0.9 - 50  # 50 = finishLine.height // 2
+                initialCarX = screenWidth / 2 - 23
+                initialCarY =  screenHeight * 0.9
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_c:
@@ -353,8 +415,11 @@ def drawingEvent():
 pygame.init()
 
 # Set up the display
+global screenWidth
+global screenHeight
 screenWidth, screenHeight = 1000, 900
-screen = pygame.display.set_mode((screenWidth, screenHeight))
+global screen
+screen = pygame.display.set_mode((screenWidth, screenHeight), pygame.RESIZABLE)
 pygame.display.set_caption("Racing Line Simulation")
 clock = pygame.time.Clock()
 userTrack = screen.copy()
@@ -366,20 +431,31 @@ darkGreen = (0, 100, 0)
 lightGreen = (144, 238, 144)
 
 # Set the initial position for the images
+global finishLineX
+global finishLineY
 finishLineX = screenWidth / 2
 finishLineY = screenHeight * 0.9 - 50  # 50 = finishLine.height // 2
 
 # Load the button
+global startButtonX
+global startButtonY
+global startButtonRect
 startButtonX = screenWidth / 2 - 60
 startButtonY = 30
 startButton = pygame.image.load("images/StartButton.png")
 startButton = pygame.transform.scale(startButton, (120, 50))
 startButtonRect = startButton.get_rect(topleft=(startButtonX, startButtonY))
 
+# Set up initial Positions for the cars
+global initialCarX
+global initialCarY
+initialCarX = screenWidth / 2 - 23
+initialCarY =  screenHeight * 0.9
+
 # Fill background with white
 screen.fill(white)
-
 simulating = drawingEvent()  # Flag if the user wants to simulate
+
 
 # Save User's track
 startButton.fill((255, 255, 255))
@@ -401,6 +477,7 @@ finishLineMask = pygame.mask.from_threshold(
 )
 
 pixelArray = pygame.surfarray.array2d(trackMaskSurface)
+screen = pygame.display.set_mode((screenWidth, screenHeight))
 
 if simulating:
     for path in configFiles:
