@@ -8,7 +8,7 @@ from car import Car
 #====================================================================================================
 # Configuration Parameters
 usingExistingTrack = False
-usingCheckpoint = False
+usingCheckpoint = True
 capturingCheckpoints = False
 captureLastGeneration = False
 
@@ -136,15 +136,7 @@ def evalGenomes(genomes, config):
         genomes: List of genomes to evaluate.
         config: NEAT configuration.
     """
-    global font
-    global bestLap
-    global bestLapText
-    global bestFirstLap
-    global bestFirstLapText
-    global population
-    global fastestGenome
-    global initialCarX
-    global initialCarY
+    global font, bestLap, bestLapText, bestFirstLap, bestFirstLapText, population, fastestGenome, initialCarX, initialCarY
 
     # Initialize cars and networks
     cars = []
@@ -286,25 +278,26 @@ def runNeat():
     if capturingCheckpoints:
         population.add_reporter(neat.Checkpointer(checkpointFrequency, filename_prefix='checkpoints/'))
 
+    # Creating text variables
     global font
     font = pygame.font.SysFont("Lucida Console", 17)
-    global bestLap
+
+    global bestLap, bestLapText
     bestLap = (math.inf, 0, 0)
-    global bestLapText
     bestLapText = font.render(
         f"{'Best Lap:':>15} {bestLap[0]:<6.2f}  Generation: {bestLap[1]:<4}  Genome ID: {bestLap[2]:<8}",
         True, 
         (0, 0, 0)
     )
 
-    global bestFirstLap
+    global bestFirstLap, bestFirstLapText
     bestFirstLap = (math.inf, 0, 0)
-    global bestFirstLapText
     bestFirstLapText = font.render(
         f"{'Best First Lap:':>15} {bestFirstLap[0]:<6.2f}  Generation: {bestFirstLap[1]:<4}  Genome ID: {bestFirstLap[2]:<8}",
         True, 
         (0, 0, 0)
     )
+
 
     global fastestGenome
     fastestGenome = None
@@ -340,16 +333,7 @@ def drawingEvent():
     """
     Handles the drawing event where the user can draw the track.
     """
-    global screen
-    global initialCarX
-    global initialCarY
-    global screenWidth
-    global screenHeight
-    global finishLineX
-    global finishLineY
-    global startButtonX
-    global startButtonY
-    global startButtonRect
+    global screen, initialCarX, initialCarY, screenWidth, screenHeight, finishLineX, finishLineY, startButtonX, startButtonY, startButtonRect
 
     drawing = False
     lastPos = None
@@ -415,9 +399,9 @@ def drawingEvent():
 pygame.init()
 
 # Set up the display
-global screenWidth
-global screenHeight
+global screenWidth, screenHeight
 screenWidth, screenHeight = 1000, 900
+
 global screen
 screen = pygame.display.set_mode((screenWidth, screenHeight), pygame.RESIZABLE)
 pygame.display.set_caption("Racing Line Simulation")
@@ -431,15 +415,12 @@ darkGreen = (0, 100, 0)
 lightGreen = (144, 238, 144)
 
 # Set the initial position for the images
-global finishLineX
-global finishLineY
+global finishLineX, finishLineY
 finishLineX = screenWidth / 2
 finishLineY = screenHeight * 0.9 - 50  # 50 = finishLine.height // 2
 
 # Load the button
-global startButtonX
-global startButtonY
-global startButtonRect
+global startButtonX, startButtonY, startButtonRect
 startButtonX = screenWidth / 2 - 60
 startButtonY = 30
 startButton = pygame.image.load("images/StartButton.png")
@@ -447,8 +428,7 @@ startButton = pygame.transform.scale(startButton, (120, 50))
 startButtonRect = startButton.get_rect(topleft=(startButtonX, startButtonY))
 
 # Set up initial Positions for the cars
-global initialCarX
-global initialCarY
+global initialCarX, initialCarY
 initialCarX = screenWidth / 2 - 23
 initialCarY =  screenHeight * 0.9
 
@@ -464,11 +444,20 @@ pygame.display.flip()
 
 if not usingExistingTrack:
     userTrack = screen.copy()  # Use user's drawn track
+    screen = pygame.display.set_mode((screenWidth, screenHeight))
 else:
     userTrack = pygame.image.load(existingTrackPath)  # Use existing track
+    screen = pygame.display.set_mode((userTrack.get_width(), userTrack.get_height()))
+    screenWidth, screenHeight = userTrack.get_width(), userTrack.get_height()
+    finishLineX = screenWidth / 2
+    finishLineY = screenHeight * 0.9 - 50  # 50 = finishLine.height // 2
+    initialCarX = screenWidth / 2 - 23
+    initialCarY =  screenHeight * 0.9
 
 # Creating the masks
 trackMaskSurface = userTrack.convert_alpha()
+pixelArray = pygame.surfarray.array2d(trackMaskSurface)
+
 outOfBoundsMask = pygame.mask.from_threshold(
     trackMaskSurface, (255, 255, 255, 255), (1, 1, 1, 255)
 )
@@ -476,13 +465,12 @@ finishLineMask = pygame.mask.from_threshold(
     trackMaskSurface, (144, 238, 144, 255), (1, 1, 1, 255)
 )
 
-pixelArray = pygame.surfarray.array2d(trackMaskSurface)
-screen = pygame.display.set_mode((screenWidth, screenHeight))
-
+# Simulating
 if simulating:
     for path in configFiles:
         configFile = path
         runNeat()
+
 
 del pixelArray
 pygame.quit()
