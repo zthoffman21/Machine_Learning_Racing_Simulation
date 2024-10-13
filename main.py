@@ -3,6 +3,7 @@ import pygame
 import math
 import random
 import neat
+from configWindow import *
 from car import Car
 
 #====================================================================================================
@@ -266,8 +267,8 @@ def runNeat():
         configFile
     )
     global population
-    if usingCheckpoint:
-        population = neat.Checkpointer.restore_checkpoint(checkpointPath)
+    if racingConfigWindow.usingExistingNetwork:
+        population = neat.Checkpointer.restore_checkpoint(racingConfigWindow.existingNetworkPath)
         if isinstance(population.population, neat.Population):
             population = population.population
     else:
@@ -399,6 +400,11 @@ def drawingEvent():
         pygame.display.flip()
     return True
 
+
+racingConfigWindow = RacingConfig()
+racingConfigWindow.run()
+print(racingConfigWindow.usingExistingNetwork)
+
 # Initialize Pygame
 pygame.init()
 
@@ -409,6 +415,7 @@ screenWidth, screenHeight = 1000, 900
 global screen
 screen = pygame.display.set_mode((screenWidth, screenHeight), pygame.RESIZABLE)
 pygame.display.set_caption("Racing Line Simulation")
+pygame.display.set_icon(pygame.image.load("images/f1Car.png"))
 clock = pygame.time.Clock()
 userTrack = screen.copy()
 
@@ -437,9 +444,11 @@ global initialCarX, initialCarY
 initialCarX = screenWidth / 2 - 23
 initialCarY =  screenHeight * 0.9
 
-# Fill background with white
 screen.fill(white)
-simulating = drawingEvent()  # Flag if the user wants to simulate
+
+simulating = racingConfigWindow.headToHeadMode is not None
+if not racingConfigWindow.usingExistingTrack and racingConfigWindow.headToHeadMode is not None:
+    simulating = drawingEvent()  # Flag if the user wants to simulate
 
 
 # Save User's track
@@ -447,11 +456,11 @@ startButton.fill((255, 255, 255))
 screen.blit(startButton, (startButtonX, startButtonY))
 pygame.display.flip()
 
-if not usingExistingTrack:
+if not racingConfigWindow.usingExistingTrack:
     userTrack = screen.copy()  # Use user's drawn track
     screen = pygame.display.set_mode((screenWidth, screenHeight))
 else:
-    userTrack = pygame.image.load(existingTrackPath)  # Use existing track
+    userTrack = pygame.image.load(racingConfigWindow.existingTrackPath)  # Use existing track
     screen = pygame.display.set_mode((userTrack.get_width(), userTrack.get_height()))
     screenWidth, screenHeight = userTrack.get_width(), userTrack.get_height()
     finishLineX = screenWidth / 2
