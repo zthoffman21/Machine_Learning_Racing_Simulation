@@ -599,8 +599,6 @@ def runNeatHeadToHead():
         populationRed.generation += 1
         populationGreen.generation += 1
 
-
-
 def drawingEvent():
     """
     Handles the drawing event where the user can draw the track.
