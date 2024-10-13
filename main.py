@@ -130,7 +130,7 @@ def evalGenomesBestTime(genomes, config):
         genomes: List of genomes to evaluate.
         config: NEAT configuration.
     """
-    global font, bestLap, bestLapText, bestFirstLap, bestFirstLapText, population, fastestGenome, initialCarX, initialCarY
+    global font, bestLap, bestLapText, bestFirstLap, bestFirstLapText, population, fastestGenome, initialCarX, initialCarY, timeAddition
 
     # Initialize cars and networks
     cars = []
@@ -159,17 +159,31 @@ def evalGenomesBestTime(genomes, config):
     startTime = pygame.time.get_ticks()
 
     # Simulation loop
-    while any(not car.crashed for car, _ in cars) and (pygame.time.get_ticks() - startTime) / 1000 < (30 * population.generation) / (19 + population.generation) + 3:
+    while any(not car.crashed for car, _ in cars) and (pygame.time.get_ticks() - startTime) / 1000 < (30 * population.generation) / (19 + population.generation) + 3 + timeAddition:
         dt = clock.tick(80) / 1000  # Frame time
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if plusButtonRect.collidepoint(event.pos):
+                    timeAddition += 1
+                    print("plus 1   Total:", timeAddition)
+                if minusButtonRect.collidepoint(event.pos):
+                    timeAddition -= 1
+                    print("edit 1   Total:", timeAddition)
+                if editButtonRect.collidepoint(event.pos):
+                    timeAddition -= 0
+                    print("edit")
 
         screen.blit(userTrack, (0, 0))
         screen.blit(bestLapText, (10, 3))
         screen.blit(bestFirstLapText, (10, 3 + bestLapText.get_height() + 5))
+        screen.blit(editButton, (editButtonX, editButtonY))
+        screen.blit(minusButton, (minusButtonX, minusButtonY))
+        screen.blit(plusButton, (plusButtonX, plusButtonY))
+        
 
         # Update and draw each car
         for idx, (car, genome) in enumerate(cars):
@@ -257,7 +271,7 @@ def evalGenomesHeadToHead(genomesRed, genomesGreen, config):
     """
     Evaluates genomes for both the Red and Green teams, displays them on the same track.
     """
-    global screen, bestLapRed, bestLapGreen, bestLapRedText, bestLapGreenText, font, populationRed, populationGreen
+    global screen, bestLapRed, bestLapGreen, bestLapRedText, bestLapGreenText, font, populationRed, populationGreen, timeAddition
 
     # Initialize Red and Green team cars
     carsRed = []
@@ -299,7 +313,7 @@ def evalGenomesHeadToHead(genomesRed, genomesGreen, config):
     startTime = pygame.time.get_ticks()
 
     # Simulation loop
-    while any(not car.crashed for car, _ in carsRed + carsGreen) and (pygame.time.get_ticks() - startTime) / 1000 < (30 * populationRed.generation) / (19 + populationRed.generation) + 3:
+    while any(not car.crashed for car, _ in carsRed + carsGreen) and (pygame.time.get_ticks() - startTime) / 1000 < (30 * populationRed.generation) / (19 + populationRed.generation) + 3 + timeAddition:
         dt = clock.tick(60) / 1000  # Frame time
 
         # Handle Pygame events
@@ -308,10 +322,24 @@ def evalGenomesHeadToHead(genomesRed, genomesGreen, config):
                 pygame.quit()
                 sys.exit()
 
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if plusButtonRect.collidepoint(event.pos):
+                    timeAddition += 1
+                    print("plus 1   Total:", timeAddition)
+                if minusButtonRect.collidepoint(event.pos):
+                    timeAddition -= 1
+                    print("edit 1   Total:", timeAddition)
+                if editButtonRect.collidepoint(event.pos):
+                    timeAddition -= 0
+                    print("edit")
+
         # Clear the screen and display the track
         screen.blit(userTrack, (0, 0))
         screen.blit(bestLapRedText, (10, 3))
         screen.blit(bestLapGreenText, (10, 3 + bestLapRedText.get_height() + 5))
+        screen.blit(editButton, (editButtonX, editButtonY))
+        screen.blit(minusButton, (minusButtonX, minusButtonY))
+        screen.blit(plusButton, (plusButtonX, plusButtonY))
 
         # Simulate Red team
         for idx, (car, genome) in enumerate(carsRed):
@@ -577,7 +605,7 @@ def drawingEvent():
     """
     Handles the drawing event where the user can draw the track.
     """
-    global screen, initialCarX, initialCarY, screenWidth, screenHeight, finishLineX, finishLineY, startButtonX, startButtonY, startButtonRect, drawingColor
+    global screen, initialCarX, initialCarY, screenWidth, screenHeight, finishLineX, finishLineY, startButtonX, startButtonY, startButtonRect, drawingColor, editButton, editButtonRect, minusButton, minusButtonRect, plusButton, plusButtonRect
 
     drawing = False
     lastPos = None
@@ -595,14 +623,28 @@ def drawingEvent():
                 screenWidth, screenHeight = event.w, event.h
                 screen = pygame.display.set_mode((screenWidth, screenHeight), pygame.RESIZABLE)
                 screen.fill(white)
-                startButtonX = screenWidth / 2 - 60
-                startButtonY = 30
+
+                startButtonX = screenWidth / 2 - 50
+                startButtonY = 15
                 startButtonRect = startButton.get_rect(topleft=(startButtonX, startButtonY))
-                # Set the initial position for the images
+
+                editButtonX = screenWidth - editButton.get_width() - 5
+                editButtonY = 5
+                minusButtonX = screenWidth - minusButton.get_width() - 110
+                minusButtonY = 5
+                plusButtonX = screenWidth - plusButton.get_width() -55
+                plusButtonY = 5
+
+                editButtonRect = editButton.get_rect(topleft=(editButtonX, editButtonY))
+                minusButtonRect = minusButton.get_rect(topleft=(minusButtonX, minusButtonY))
+                plusButtonRect = plusButton.get_rect(topleft=(plusButtonX, plusButtonY))
+
                 finishLineX = screenWidth / 2
                 finishLineY = screenHeight * 0.9 - 50  # 50 = finishLine.height // 2
                 initialCarX = screenWidth / 2 - 23
                 initialCarY =  screenHeight * 0.9
+
+                
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_c:
@@ -638,7 +680,7 @@ def drawingEvent():
                     drawCircle(screen, drawingColor, lastPos, currentPos, brushRadius)
                 lastPos = currentPos
 
-        drawFinishLine(finishLineX, finishLineY, 30, 100, 3)
+        drawFinishLine(finishLineX-15, finishLineY, 30, 100, 3)
         screen.blit(startButton, (startButtonX, startButtonY))
         pygame.display.flip()
     return True
@@ -676,11 +718,28 @@ if __name__ == "__main__":
 
     # Load the button
     global startButtonX, startButtonY, startButtonRect
-    startButtonX = screenWidth / 2 - 60
-    startButtonY = 30
+    startButtonX = screenWidth / 2 - 50
+    startButtonY = 15
     startButton = pygame.image.load("images/StartButton.png")
-    startButton = pygame.transform.scale(startButton, (120, 50))
+    startButton = pygame.transform.scale(startButton, (100, 100))
     startButtonRect = startButton.get_rect(topleft=(startButtonX, startButtonY))
+
+    global editButton, editButtonRect, minusButton, minusButtonRect, plusButton, plusButtonRect, timeAddition
+    timeAddition = 0
+    editButton = pygame.transform.scale(pygame.image.load("images/editButton.png"), (40,40))
+    minusButton = pygame.transform.scale(pygame.image.load("images/minusButton.png"), (40,40))
+    plusButton = pygame.transform.scale(pygame.image.load("images/plusButton.png"), (40,40))
+
+    editButtonX = screenWidth - editButton.get_width() - 5
+    editButtonY = 5
+    minusButtonX = screenWidth - minusButton.get_width() - 95
+    minusButtonY = 5
+    plusButtonX = screenWidth - plusButton.get_width() -50
+    plusButtonY = 5
+
+    editButtonRect = editButton.get_rect(topleft=(editButtonX, editButtonY))
+    minusButtonRect = minusButton.get_rect(topleft=(minusButtonX, minusButtonY))
+    plusButtonRect = plusButton.get_rect(topleft=(plusButtonX, plusButtonY))
 
     # Set up initial Positions for the cars
     global initialCarX, initialCarY
@@ -730,7 +789,6 @@ if __name__ == "__main__":
         else:
             configFile = "configFiles/config.txt"
             runNeatBestTime()
-
 
 
     del pixelArray
