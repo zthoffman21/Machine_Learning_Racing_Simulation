@@ -54,15 +54,15 @@ class RacingConfig():
     
     def returnHeadToHeadInfo(self, accelerationMultRed, decelerationMultRed, downforceMultRed, maxSpeedMultRed, accelerationMultGreen, decelerationMultGreen, downforceMultGreen, maxSpeedMultGreen, usingExistingTrack, existingTrackPath):
         # Red Team variables
-        self.accelerationMultRed = accelerationMultRed
-        self.decelerationMultRed = decelerationMultRed
-        self.downforceMultRed = downforceMultRed
-        self.maxSpeedMultRed = maxSpeedMultRed
+        self.accelerationMultRed = accelerationMultRed**.1
+        self.decelerationMultRed = decelerationMultRed**.1
+        self.downforceMultRed = downforceMultRed**.25
+        self.maxSpeedMultRed = maxSpeedMultRed**.25
         # Green Team variables
-        self.accelerationMultGreen = accelerationMultGreen
-        self.decelerationMultGreen = decelerationMultGreen
-        self.downforceMultGreen = downforceMultGreen
-        self.maxSpeedMultGreen = maxSpeedMultGreen
+        self.accelerationMultGreen = accelerationMultGreen**.1
+        self.decelerationMultGreen = decelerationMultGreen**.1
+        self.downforceMultGreen = downforceMultGreen**.25
+        self.maxSpeedMultGreen = maxSpeedMultGreen**.25
 
         # Both Mode variables
         self.usingExistingTrack = usingExistingTrack
@@ -71,10 +71,10 @@ class RacingConfig():
         self.window.destroy()
 
     def returnBestTimeInfo(self, accelerationMult, decelerationMult, downforceMult, maxSpeedMult, usingExistingTrack, existingTrackPath, usingExistingNetwork, existingNetworkPath):
-        self.accelerationMult = accelerationMult
-        self.decelerationMult = decelerationMult
-        self.downforceMult = downforceMult
-        self.maxSpeedMult = maxSpeedMult
+        self.accelerationMult = accelerationMult**.1
+        self.decelerationMult = decelerationMult**.1
+        self.downforceMult = downforceMult**.25
+        self.maxSpeedMult = maxSpeedMult**.25
         self.usingExistingTrack = usingExistingTrack
         self.existingTrackPath = existingTrackPath
         self.usingExistingNetwork = usingExistingNetwork

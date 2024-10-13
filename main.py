@@ -3,21 +3,14 @@ import pygame
 import math
 import random
 import neat
+import threading
 from configWindow import *
 from car import Car
 
 #====================================================================================================
 # Configuration Parameters
-usingExistingTrack = False
-usingCheckpoint = False
 capturingCheckpoints = False
 captureLastGeneration = False
-
-existingTrackPath = "images/hardTest.png"
-checkpointPath = "checkpoints/129-6.43"
-configFiles = [  # Allows user to set multiple config files that will run one after another
-    "configFiles/config1.txt"
-]
 
 checkpointFrequency = 50
 numberOfGenerationsSimulated = 200
@@ -127,7 +120,7 @@ def fitness(genome, car, dt):
         car.completedLap = False
 
 
-def evalGenomes(genomes, config):
+def evalGenomesBestTime(genomes, config):
     """
     Evaluates each genome in the population.
     During testing, I tried normalizing the inputs, but that seemed to make the cars worse. I believe this is because the front sensor is the most important, and when it is normalized, its magnitude,
@@ -152,6 +145,11 @@ def evalGenomes(genomes, config):
         car.lapStart = pygame.time.get_ticks() / 1000
         alive += 1
         networks.append(net)
+
+        car.acceleration *= racingConfigWindow.accelerationMult
+        car.deceleration *= racingConfigWindow.decelerationMult
+        car.downforceNewtons *= racingConfigWindow.downforceMult
+        car.maxVelocity *= racingConfigWindow.maxSpeedMult
 
     if fastestGenome is not None:
         cars[0] = (cars[0][0], fastestGenome)
@@ -212,7 +210,7 @@ def evalGenomes(genomes, config):
                     alive -= 1
 
                 # Check for finish line crossing
-                if math.cos(car.carAngle) > 0 and checkCollisionWithFinishLine(car) and car.leftFinishLine :
+                if math.cos(car.carAngle) > 0 and checkCollisionWithFinishLine(car) and car.leftFinishLine and pygame.time.get_ticks() / 1000 - car.lapStart  >= 2:
                     lapTime = pygame.time.get_ticks() / 1000 - car.lapStart
                     car.totalLaps.append(lapTime)
                     car.lapStart = pygame.time.get_ticks() / 1000
@@ -255,7 +253,191 @@ def evalGenomes(genomes, config):
 
     print("Number of cars survived:", alive)
 
-def runNeat():
+def evalGenomesHeadToHead(genomesRed, genomesGreen, config):
+    """
+    Evaluates genomes for both the Red and Green teams, displays them on the same track.
+    """
+    global screen, bestLapRed, bestLapGreen, bestLapRedText, bestLapGreenText, font, populationRed, populationGreen
+
+    # Initialize Red and Green team cars
+    carsRed = []
+    carsGreen = []
+    networksRed = []
+    networksGreen = []
+
+    # Initialize cars for Red team
+    for genome_id, genome in genomesRed:
+        genome.fitness = 0
+        car = Car(initialCarX, initialCarY, carOptions[0])  # Red car
+        car.genomeID = genome_id
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        carsRed.append((car, genome))
+        networksRed.append(net)
+        car.lapStart = pygame.time.get_ticks() / 1000
+
+        car.acceleration *= racingConfigWindow.accelerationMultRed
+        car.deceleration *= racingConfigWindow.decelerationMultRed
+        car.downforceNewtons *= racingConfigWindow.downforceMultRed
+        car.maxVelocity *= racingConfigWindow.maxSpeedMultRed
+
+    # Initialize cars for Green team
+    for genome_id, genome in genomesGreen:
+        genome.fitness = 0
+        car = Car(initialCarX, initialCarY, carOptions[2])  # Green car
+        car.genomeID = genome_id
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        carsGreen.append((car, genome))
+        networksGreen.append(net)
+        car.lapStart = pygame.time.get_ticks() / 1000
+
+        car.acceleration *= racingConfigWindow.accelerationMultGreen
+        car.deceleration *= racingConfigWindow.decelerationMultGreen
+        car.downforceNewtons *= racingConfigWindow.downforceMultGreen
+        car.maxVelocity *= racingConfigWindow.maxSpeedMultGreen
+
+    clock = pygame.time.Clock()
+    startTime = pygame.time.get_ticks()
+
+    # Simulation loop
+    while any(not car.crashed for car, _ in carsRed + carsGreen) and (pygame.time.get_ticks() - startTime) / 1000 < (30 * populationRed.generation) / (19 + populationRed.generation) + 3:
+        dt = clock.tick(60) / 1000  # Frame time
+
+        # Handle Pygame events
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+
+        # Clear the screen and display the track
+        screen.blit(userTrack, (0, 0))
+        screen.blit(bestLapRedText, (10, 3))
+        screen.blit(bestLapGreenText, (10, 3 + bestLapRedText.get_height() + 5))
+
+        # Simulate Red team
+        for idx, (car, genome) in enumerate(carsRed):
+            if not car.crashed:
+                car.castLines(screen, pixelArray)
+
+                inputs = [
+                    car.frontCast,
+                    car.leftCast,
+                    car.rightCast,
+                    car.left30AngleCast,
+                    car.right30AngleCast,
+                    car.left45AngleCast,
+                    car.right45AngleCast,
+                    car.velocity,
+                    car.maxWheelAngle,
+                    car.currentWheelAngle
+                ]
+                output = networksRed[idx].activate(inputs)
+
+                # Initial acceleration and steering limitations
+                if (pygame.time.get_ticks() - startTime) / 1000 < 2:
+                    car.throttlePosition = 0.55
+                    car.currentWheelAngle = (output[1] * 2 - 1) * car.maxWheelAngle * 0.2
+                else:
+                    car.throttlePosition = output[0]
+                    car.currentWheelAngle = (output[1] * 2 - 1) * car.maxWheelAngle
+
+                # Update car
+                car.updateVelocity(dt)
+                car.updateCarPosition(dt)
+                car.displayCar(screen)
+
+                # Check for collisions
+                checkCollisionWithWhitePixels(car)
+
+                # Check for finish line crossing
+                if math.cos(car.carAngle) > 0 and checkCollisionWithFinishLine(car) and car.leftFinishLine and pygame.time.get_ticks() / 1000 - car.lapStart  >= 2:
+                    lapTime = pygame.time.get_ticks() / 1000 - car.lapStart
+                    car.totalLaps.append(lapTime)
+                    car.lapStart = pygame.time.get_ticks() / 1000
+                    car.leftFinishLine = False
+                    car.completedLap = True  # Set the flag
+
+                    print(f"Lap: {len(car.totalLaps)} Time: {lapTime:.2f} Average: {sum(car.totalLaps) / len(car.totalLaps):.2f}")
+                    if lapTime < bestLapRed[0]:
+                        bestLapRed = (lapTime, populationRed.generation, car.genomeID)
+                        genome.fitness += 5000
+                        print(f"Best Lap: {bestLapRed[0]:.2f} Generation: {bestLapRed[1]} Genome ID: {bestLapRed[2]}")
+                        bestLapRedText = font.render(
+                            f"{'Best Lap:':>15} {bestLapRed[0]:<6.2f}  Generation: {bestLapRed[1]:<4}  Genome ID: {bestLapRed[2]:<8}",
+                            True, 
+                            (111, 0, 39)
+                        )
+
+                if not car.hitFinishLine and not car.leftFinishLine:
+                    car.leftFinishLine = True
+
+                # Calculate fitness
+                fitness(genome, car, dt)
+
+        # Simulate Green team
+        for idx, (car, genome) in enumerate(carsGreen):
+            if not car.crashed:
+                car.castLines(screen, pixelArray)
+                inputs = [
+                    car.frontCast,
+                    car.leftCast,
+                    car.rightCast,
+                    car.left30AngleCast,
+                    car.right30AngleCast,
+                    car.left45AngleCast,
+                    car.right45AngleCast,
+                    car.velocity,
+                    car.maxWheelAngle,
+                    car.currentWheelAngle
+                ]
+                output = networksGreen[idx].activate(inputs)
+
+                # Initial acceleration and steering limitations
+                if (pygame.time.get_ticks() - startTime) / 1000 < 2:
+                    car.throttlePosition = 0.55
+                    car.currentWheelAngle = (output[1] * 2 - 1) * car.maxWheelAngle * 0.2
+                else:
+                    car.throttlePosition = output[0]
+                    car.currentWheelAngle = (output[1] * 2 - 1) * car.maxWheelAngle
+
+                # Update car
+                car.updateVelocity(dt)
+                car.updateCarPosition(dt)
+                car.displayCar(screen)
+
+
+                # Check for collisions
+                checkCollisionWithWhitePixels(car)
+
+                # Check for finish line crossing
+                if math.cos(car.carAngle) > 0 and checkCollisionWithFinishLine(car) and car.leftFinishLine and pygame.time.get_ticks() / 1000 - car.lapStart  >= 2:
+                    lapTime = pygame.time.get_ticks() / 1000 - car.lapStart
+                    car.totalLaps.append(lapTime)
+                    car.lapStart = pygame.time.get_ticks() / 1000
+                    car.leftFinishLine = False
+                    car.completedLap = True  # Set the flag
+
+                    print(f"Lap: {len(car.totalLaps)} Time: {lapTime:.2f} Average: {sum(car.totalLaps) / len(car.totalLaps):.2f}")
+                    if lapTime < bestLapGreen[0]:
+                        bestLapGreen = (lapTime, populationGreen.generation, car.genomeID)
+                        genome.fitness += 5000
+                        print(f"Best Lap: {bestLapGreen[0]:.2f} Generation: {bestLapGreen[1]} Genome ID: {bestLapGreen[2]}")
+                        bestLapGreenText = font.render(
+                            f"{'Best Lap:':>15} {bestLapGreen[0]:<6.2f}  Generation: {bestLapGreen[1]:<4}  Genome ID: {bestLapGreen[2]:<8}",
+                            True, 
+                            (2, 106, 55)
+                        )
+
+                if not car.hitFinishLine and not car.leftFinishLine:
+                    car.leftFinishLine = True
+
+                # Calculate fitness
+                fitness(genome, car, dt)
+
+
+        # Update the display
+        pygame.display.flip()
+
+def runNeatBestTime():
     """
     Runs the NEAT algorithm with the provided configuration.
     """
@@ -299,36 +481,97 @@ def runNeat():
         (0, 0, 0)
     )
 
-
     global fastestGenome
     fastestGenome = None
 
-    winner = population.run(evalGenomes, numberOfGenerationsSimulated)
+    winner = population.run(evalGenomesBestTime, numberOfGenerationsSimulated)
 
     print(f"Best genome: {winner}")
     print(f"Best Lap: {bestLap[0]:.2f} Generation: {bestLap[1]} Genome ID: {bestLap[2]}")
     print(f"Best First Lap: {bestFirstLap[0]:.2f} Generation: {bestFirstLap[1]} Genome ID: {bestFirstLap[2]}")
 
+def runNeatHeadToHead():
+    """
+    Runs the NEAT algorithm with two populations (Red vs Green) concurrently.
+    """
+    config = neat.config.Config(
+        neat.DefaultGenome,
+        neat.DefaultReproduction,
+        neat.DefaultSpeciesSet,
+        neat.DefaultStagnation,
+        configFile
+    )
 
-    if captureLastGeneration:
-        fileName = (
-            'checkpoints/configFile-'
-            + configFile.split("/")[1].replace(".txt", "")
-            + "_Time-"
-            + str(round(bestLap[0], 5))
-            + "_Track-"
+    # Initialize populations for both teams
+    global populationRed, populationGreen
+    populationRed = neat.Population(config)
+    populationGreen = neat.Population(config)
+
+    # populationRed.add_reporter(neat.StdOutReporter(True))
+    populationRed.add_reporter(neat.StatisticsReporter())
+    # populationGreen.add_reporter(neat.StdOutReporter(True))
+    populationGreen.add_reporter(neat.StatisticsReporter())
+
+    bestRedGenome = None  # Track the best Red team genome
+    bestGreenGenome = None  # Track the best Green team genome
+
+    global font
+    font = pygame.font.SysFont("Lucida Console", 17)
+
+    global bestLapRed, bestLapRedText
+    bestLapRed = (math.inf, 0, 0)
+    bestLapRedText = font.render(
+        f"{'Best Lap:':>15} {bestLapRed[0]:<6.2f}  Generation: {bestLapRed[1]:<4}  Genome ID: {bestLapRed[2]:<8}",
+        True, 
+        (111, 0, 39)
+    )
+    global bestLapGreen, bestLapGreenText
+    bestLapGreen = (math.inf, 0, 0)
+    bestLapGreenText = font.render(
+        f"{'Best Lap:':>15} {bestLapGreen[0]:<6.2f}  Generation: {bestLapGreen[1]:<4}  Genome ID: {bestLapGreen[2]:<8}",
+        True, 
+        (2, 106, 55)
+    )
+
+
+    # Run evaluation for both populations
+    while True:
+        # Get next generation of genomes
+        genomesRed = list(populationRed.population.items())
+        genomesGreen = list(populationGreen.population.items())
+
+        # Evaluate both populations head-to-head
+        evalGenomesHeadToHead(genomesRed, genomesGreen, config)
+
+        # Find the best genomes from the Red and Green teams
+        bestRedGenome = max(genomesRed, key=lambda genome: genome[1].fitness)[1]
+        bestGreenGenome = max(genomesGreen, key=lambda genome: genome[1].fitness)[1]
+
+        # Report the best genomes
+        populationRed.reporters.post_evaluate(config, populationRed.population, populationRed.species, bestRedGenome)
+        populationGreen.reporters.post_evaluate(config, populationGreen.population, populationGreen.species, bestGreenGenome)
+
+        # Advance both populations to the next generation
+        populationRed.population = populationRed.reproduction.reproduce(
+            config, populationRed.species, config.pop_size, populationRed.generation
         )
-        if usingExistingTrack:
-            fileName += existingTrackPath.split("/")[1].replace(".png", "") + "_Gen-"
-        else:
-            fileName += "userTrack_Gen-"
-        checkpointer = neat.Checkpointer(filename_prefix=fileName)
-        checkpointer.save_checkpoint(
-            config=config,
-            generation=population.generation,
-            population=population,
-            species_set=population.species,
+        populationGreen.population = populationGreen.reproduction.reproduce(
+            config, populationGreen.species, config.pop_size, populationGreen.generation
         )
+
+        # Handle species extinction
+        populationRed.species.speciate(config, populationRed.population, populationRed.generation)
+        populationGreen.species.speciate(config, populationGreen.population, populationGreen.generation)
+
+        # Check if either population has reached its goal (e.g., a minimum fitness)
+        if bestRedGenome.fitness > 25000 or bestGreenGenome.fitness > 25000 or populationRed.generation >= numberOfGenerationsSimulated:
+            print(f"Simulation complete. Best Red Genome Fitness: {bestRedGenome.fitness}, Best Green Genome Fitness: {bestGreenGenome.fitness}")
+            break  # End the simulation when a target fitness is reached
+
+        populationRed.generation += 1
+        populationGreen.generation += 1
+
+
 
 def drawingEvent():
     """
@@ -401,90 +644,94 @@ def drawingEvent():
     return True
 
 
-racingConfigWindow = RacingConfig()
-racingConfigWindow.run()
-print(racingConfigWindow.usingExistingNetwork)
+if __name__ == "__main__":
+    racingConfigWindow = RacingConfig()
+    racingConfigWindow.run()
 
-# Initialize Pygame
-pygame.init()
+    # Initialize Pygame
+    pygame.init()
 
-# Set up the display
-global screenWidth, screenHeight
-screenWidth, screenHeight = 1000, 900
+    # Set up the display
+    global screenWidth, screenHeight
+    screenWidth, screenHeight = 1000, 900
 
-global screen
-screen = pygame.display.set_mode((screenWidth, screenHeight), pygame.RESIZABLE)
-pygame.display.set_caption("Racing Line Simulation")
-pygame.display.set_icon(pygame.image.load("images/f1Car.png"))
-clock = pygame.time.Clock()
-userTrack = screen.copy()
+    global screen
+    screen = pygame.display.set_mode((screenWidth, screenHeight), pygame.RESIZABLE)
+    pygame.display.set_caption("Racing Line Simulation")
+    pygame.display.set_icon(pygame.image.load("images/f1Car.png"))
+    clock = pygame.time.Clock()
+    userTrack = screen.copy()
 
-# Set up colors
-global drawingColor
-white = (255, 255, 255)
-drawingColor = black = (0, 0, 0)
-darkGreen = (0, 100, 0)
-lightGreen = (144, 238, 144)
+    # Set up colors
+    global drawingColor
+    white = (255, 255, 255)
+    drawingColor = black = (0, 0, 0)
+    darkGreen = (0, 100, 0)
+    lightGreen = (144, 238, 144)
 
-# Set the initial position for the images
-global finishLineX, finishLineY
-finishLineX = screenWidth / 2
-finishLineY = screenHeight * 0.9 - 50  # 50 = finishLine.height // 2
-
-# Load the button
-global startButtonX, startButtonY, startButtonRect
-startButtonX = screenWidth / 2 - 60
-startButtonY = 30
-startButton = pygame.image.load("images/StartButton.png")
-startButton = pygame.transform.scale(startButton, (120, 50))
-startButtonRect = startButton.get_rect(topleft=(startButtonX, startButtonY))
-
-# Set up initial Positions for the cars
-global initialCarX, initialCarY
-initialCarX = screenWidth / 2 - 23
-initialCarY =  screenHeight * 0.9
-
-screen.fill(white)
-
-simulating = racingConfigWindow.headToHeadMode is not None
-if not racingConfigWindow.usingExistingTrack and racingConfigWindow.headToHeadMode is not None:
-    simulating = drawingEvent()  # Flag if the user wants to simulate
-
-
-# Save User's track
-startButton.fill((255, 255, 255))
-screen.blit(startButton, (startButtonX, startButtonY))
-pygame.display.flip()
-
-if not racingConfigWindow.usingExistingTrack:
-    userTrack = screen.copy()  # Use user's drawn track
-    screen = pygame.display.set_mode((screenWidth, screenHeight))
-else:
-    userTrack = pygame.image.load(racingConfigWindow.existingTrackPath)  # Use existing track
-    screen = pygame.display.set_mode((userTrack.get_width(), userTrack.get_height()))
-    screenWidth, screenHeight = userTrack.get_width(), userTrack.get_height()
+    # Set the initial position for the images
+    global finishLineX, finishLineY
     finishLineX = screenWidth / 2
     finishLineY = screenHeight * 0.9 - 50  # 50 = finishLine.height // 2
+
+    # Load the button
+    global startButtonX, startButtonY, startButtonRect
+    startButtonX = screenWidth / 2 - 60
+    startButtonY = 30
+    startButton = pygame.image.load("images/StartButton.png")
+    startButton = pygame.transform.scale(startButton, (120, 50))
+    startButtonRect = startButton.get_rect(topleft=(startButtonX, startButtonY))
+
+    # Set up initial Positions for the cars
+    global initialCarX, initialCarY
     initialCarX = screenWidth / 2 - 23
     initialCarY =  screenHeight * 0.9
 
-# Creating the masks
-trackMaskSurface = userTrack.convert_alpha()
-pixelArray = pygame.surfarray.array2d(trackMaskSurface)
+    screen.fill(white)
 
-outOfBoundsMask = pygame.mask.from_threshold(
-    trackMaskSurface, (255, 255, 255, 255), (1, 1, 1, 255)
-)
-finishLineMask = pygame.mask.from_threshold(
-    trackMaskSurface, (144, 238, 144, 255), (1, 1, 1, 255)
-)
-
-# Simulating
-if simulating:
-    for path in configFiles:
-        configFile = path
-        runNeat()
+    simulating = racingConfigWindow.headToHeadMode is not None
+    if not racingConfigWindow.usingExistingTrack and racingConfigWindow.headToHeadMode is not None:
+        simulating = drawingEvent()  # Flag if the user wants to simulate
 
 
-del pixelArray
-pygame.quit()
+    # Save User's track
+    startButton.fill((255, 255, 255))
+    screen.blit(startButton, (startButtonX, startButtonY))
+    pygame.display.flip()
+
+    if not racingConfigWindow.usingExistingTrack:
+        userTrack = screen.copy()  # Use user's drawn track
+        screen = pygame.display.set_mode((screenWidth, screenHeight))
+    else:
+        userTrack = pygame.image.load(racingConfigWindow.existingTrackPath)  # Use existing track
+        screen = pygame.display.set_mode((userTrack.get_width(), userTrack.get_height()))
+        screenWidth, screenHeight = userTrack.get_width(), userTrack.get_height()
+        finishLineX = screenWidth / 2
+        finishLineY = screenHeight * 0.9 - 50  # 50 = finishLine.height // 2
+        initialCarX = screenWidth / 2 - 23
+        initialCarY =  screenHeight * 0.9
+
+    # Creating the masks
+    trackMaskSurface = userTrack.convert_alpha()
+    pixelArray = pygame.surfarray.array2d(trackMaskSurface)
+
+    outOfBoundsMask = pygame.mask.from_threshold(
+        trackMaskSurface, (255, 255, 255, 255), (1, 1, 1, 255)
+    )
+    finishLineMask = pygame.mask.from_threshold(
+        trackMaskSurface, (144, 238, 144, 255), (1, 1, 1, 255)
+    )
+
+    # Simulating
+    if simulating:
+        if racingConfigWindow.headToHeadMode:
+            configFile = "configFiles/configHeadToHead.txt"
+            runNeatHeadToHead()
+        else:
+            configFile = "configFiles/config.txt"
+            runNeatBestTime()
+
+
+
+    del pixelArray
+    pygame.quit()

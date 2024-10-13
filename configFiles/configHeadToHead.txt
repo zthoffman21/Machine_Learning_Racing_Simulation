@@ -1,0 +1,79 @@
+[NEAT]
+fitness_criterion     = max
+fitness_threshold     = 100000000000
+pop_size              = 150
+reset_on_extinction   = True
+
+[DefaultGenome]
+# Node activation options
+activation_default      = sigmoid
+activation_mutate_rate  = 0.0          
+activation_options      = sigmoid tanh relu
+
+# Node aggregation options
+aggregation_default     = sum
+aggregation_mutate_rate = 0.0           
+aggregation_options     = sum
+
+# Node bias options
+bias_init_mean          = 0.0
+bias_init_stdev         = 1.0
+bias_max_value          = 30.0
+bias_min_value          = -30.0
+bias_mutate_power       = 0.5
+bias_mutate_rate        = 0.0      
+bias_replace_rate       = 0.1
+
+# Genome compatibility options
+compatibility_disjoint_coefficient = 0.5
+compatibility_weight_coefficient   = 0.15
+
+# Connection add/remove rates
+conn_add_prob           = 0.0            
+conn_delete_prob        = 0.0            
+
+# Connection enable options
+enabled_default         = True
+enabled_mutate_rate     = 0.05
+
+feed_forward            = True
+initial_connection      = full_direct
+
+# Node add/remove rates
+node_add_prob           = 0.0           
+node_delete_prob        = 0.0           
+
+# Network parameters
+num_hidden              = 0
+num_inputs              = 10
+num_outputs             = 2
+
+# Node response options
+response_init_mean      = 1.0
+response_init_stdev     = 0.0
+response_max_value      = 30.0
+response_min_value      = -30.0
+response_mutate_power   = 0.0
+response_mutate_rate    = 0.0           
+response_replace_rate   = 0.0
+
+# Connection weight options
+weight_init_mean        = 0.0
+weight_init_stdev       = 1.0
+weight_max_value        = 30
+weight_min_value        = -30
+weight_mutate_power     = 0.5
+weight_mutate_rate      = 0.01        
+weight_replace_rate     = 0.0       
+
+[DefaultSpeciesSet]
+compatibility_threshold = .5        
+
+[DefaultStagnation]
+species_fitness_func = max
+max_stagnation       = 15
+species_elitism      = 1
+
+[DefaultReproduction]
+elitism            = 2                  
+survival_threshold = 0.1
