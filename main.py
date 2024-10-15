@@ -23,6 +23,19 @@ yellowCar = pygame.transform.scale(pygame.image.load("images/f1CarYellow.png"), 
 carOptions = [redCar, blueCar, greenCar, yellowCar]
 #====================================================================================================
 
+def createMasks():
+    global trackMaskSurface, pixelArray, outOfBoundsMask, finishLineMask
+    # Creating the masks
+    trackMaskSurface = userTrack.convert_alpha()
+    pixelArray = pygame.surfarray.array2d(trackMaskSurface)
+
+    outOfBoundsMask = pygame.mask.from_threshold(
+        trackMaskSurface, (255, 255, 255, 255), (1, 1, 1, 255)
+    )
+    finishLineMask = pygame.mask.from_threshold(
+        trackMaskSurface, (144, 238, 144, 255), (1, 1, 1, 255)
+    )
+
 def drawCircle(screen, color, start, end, radius):
     """
     Draws a smooth line between start and end points by drawing circles along the path.
@@ -57,7 +70,8 @@ def checkCollisionWithWhitePixels(car):
     offsetX = rotatedCarRect.left
     offsetY = rotatedCarRect.top
     overlap = outOfBoundsMask.overlap(carMask, (offsetX, offsetY))
-    if overlap:
+
+    if overlap or car.carX > screenWidth or car.carX < 0 or car.carY > screenHeight or car.carY < 0:
         car.crashed = True
 
 def checkCollisionWithFinishLine(car):
@@ -174,7 +188,9 @@ def evalGenomesBestTime(genomes, config):
                     timeAddition -= 1
                     print("edit 1   Total:", timeAddition)
                 if editButtonRect.collidepoint(event.pos):
-                    timeAddition -= 0
+                    if not drawingEvent():
+                        pygame.quit()
+                        sys.exit()
                     print("edit")
 
         screen.blit(userTrack, (0, 0))
@@ -330,7 +346,9 @@ def evalGenomesHeadToHead(genomesRed, genomesGreen, config):
                     timeAddition -= 1
                     print("edit 1   Total:", timeAddition)
                 if editButtonRect.collidepoint(event.pos):
-                    timeAddition -= 0
+                    if not drawingEvent():
+                        pygame.quit()
+                        sys.exit()
                     print("edit")
 
         # Clear the screen and display the track
@@ -603,11 +621,15 @@ def drawingEvent():
     """
     Handles the drawing event where the user can draw the track.
     """
-    global screen, initialCarX, initialCarY, screenWidth, screenHeight, finishLineX, finishLineY, startButtonX, startButtonY, startButtonRect, drawingColor, editButton, editButtonRect, minusButton, minusButtonRect, plusButton, plusButtonRect
+    global screen, userTrack, initialCarX, initialCarY, screenWidth, screenHeight, finishLineX, finishLineY, startButtonX, startButtonY, startButtonRect, drawingColor, editButton, editButtonRect, minusButton, minusButtonRect, plusButton, plusButtonRect
 
     drawing = False
     lastPos = None
     brushRadius = 50
+
+    screen.blit(userTrack, (0,0))
+    startButton = pygame.image.load("images/StartButton.png")
+    startButton = pygame.transform.scale(startButton, (100, 100))
 
     drawingEvent = True
     while drawingEvent:
@@ -677,10 +699,19 @@ def drawingEvent():
                 if lastPos:
                     drawCircle(screen, drawingColor, lastPos, currentPos, brushRadius)
                 lastPos = currentPos
-
         drawFinishLine(finishLineX-15, finishLineY, 30, 100, 3)
         screen.blit(startButton, (startButtonX, startButtonY))
         pygame.display.flip()
+
+    # Save User's track
+    startButton.fill((255, 255, 255))
+    screen.blit(startButton, (startButtonX, startButtonY))
+    pygame.display.flip()
+
+    userTrack = screen.copy()  # Use user's drawn track
+    screen = pygame.display.set_mode((screenWidth, screenHeight))
+    createMasks()
+
     return True
 
 
@@ -695,11 +726,12 @@ if __name__ == "__main__":
     global screenWidth, screenHeight
     screenWidth, screenHeight = 1000, 900
 
-    global screen
+    global screen, userTrack
     screen = pygame.display.set_mode((screenWidth, screenHeight), pygame.RESIZABLE)
     pygame.display.set_caption("Racing Line Simulation")
     pygame.display.set_icon(pygame.image.load("images/f1Car.png"))
     clock = pygame.time.Clock()
+    screen.fill((255,255,255))
     userTrack = screen.copy()
 
     # Set up colors
@@ -750,16 +782,7 @@ if __name__ == "__main__":
     if not racingConfigWindow.usingExistingTrack and racingConfigWindow.headToHeadMode is not None:
         simulating = drawingEvent()  # Flag if the user wants to simulate
 
-
-    # Save User's track
-    startButton.fill((255, 255, 255))
-    screen.blit(startButton, (startButtonX, startButtonY))
-    pygame.display.flip()
-
-    if not racingConfigWindow.usingExistingTrack:
-        userTrack = screen.copy()  # Use user's drawn track
-        screen = pygame.display.set_mode((screenWidth, screenHeight))
-    else:
+    if racingConfigWindow.usingExistingTrack:
         userTrack = pygame.image.load(racingConfigWindow.existingTrackPath)  # Use existing track
         screen = pygame.display.set_mode((userTrack.get_width(), userTrack.get_height()))
         screenWidth, screenHeight = userTrack.get_width(), userTrack.get_height()
@@ -768,16 +791,9 @@ if __name__ == "__main__":
         initialCarX = screenWidth / 2 - 23
         initialCarY =  screenHeight * 0.9
 
-    # Creating the masks
-    trackMaskSurface = userTrack.convert_alpha()
-    pixelArray = pygame.surfarray.array2d(trackMaskSurface)
-
-    outOfBoundsMask = pygame.mask.from_threshold(
-        trackMaskSurface, (255, 255, 255, 255), (1, 1, 1, 255)
-    )
-    finishLineMask = pygame.mask.from_threshold(
-        trackMaskSurface, (144, 238, 144, 255), (1, 1, 1, 255)
-    )
+    global trackMaskSurface, pixelArray, outOfBoundsMask, finishLineMask
+    if racingConfigWindow.usingExistingTrack:
+        createMasks()
 
     # Simulating
     if simulating:
