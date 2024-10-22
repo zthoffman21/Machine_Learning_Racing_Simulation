@@ -3,7 +3,6 @@ import pygame
 import math
 import random
 import neat
-import threading
 from configWindow import *
 from car import Car
 
@@ -132,7 +131,6 @@ def fitness(genome, car, dt):
     if car.completedLap:
         genome.fitness += 10000 / car.totalLaps[-1]
         car.completedLap = False
-
 
 def evalGenomesBestTime(genomes, config):
     """
@@ -713,7 +711,6 @@ def drawingEvent():
     createMasks()
 
     return True
-
 
 if __name__ == "__main__":
     racingConfigWindow = RacingConfig()
