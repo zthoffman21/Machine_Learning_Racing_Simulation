@@ -254,7 +254,7 @@ class BestTimePage():
             self.frame.grid_rowconfigure(i, weight=1)
 
         # Creating components
-        header = tk.Label(self.frame, text="Head to Head Mode", font=("Lucida Console", 15))
+        header = tk.Label(self.frame, text="Best Time Mode", font=("Lucida Console", 15))
         backButton = tk.Button(self.frame, text="Back to Main Menu", command=lambda: root.show_frame("StartPage"))
         continueButton = tk.Button(self.frame, text="Continue", command=lambda: root.returnBestTimeInfo(accelerationMult.get(), decelerationMult.get(), downforceMult.get(), maxSpeedMult.get(), usingExistingTrack.get(), existingTrackPath.get(), usingExistingNetwork.get(), existingNetworkPath.get()))
 
